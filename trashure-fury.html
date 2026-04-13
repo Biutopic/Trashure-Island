@@ -1384,27 +1384,19 @@ fbxLoader.load(
         else if (size === 'medium') displayScale = 0.025;
         else                        displayScale = 0.02;
 
-        // Clone material to avoid shared state issues, add fallback
-        let mat;
-        if (c.material) {
-          mat = Array.isArray(c.material)
-            ? c.material.map(m => m.clone())
-            : c.material.clone();
-        } else {
-          mat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.6 });
-        }
-
-        // Ensure materials are visible (some FBX mats have zero opacity or are transparent)
-        const fixMat = m => {
-          if (m.opacity < 0.1) m.opacity = 1.0;
-          m.transparent = m.opacity < 1.0;
-          m.side = THREE.DoubleSide;
-          // If no color map, give a visible base color
-          if (!m.map && (!m.color || m.color.getHex() === 0x000000)) {
-            m.color = new THREE.Color(0xbb9966);
-          }
-        };
-        if (Array.isArray(mat)) mat.forEach(fixMat); else fixMat(mat);
+        // Flashy colorful plastic materials
+        const flashyColors = [
+          0xff2255, 0xff6600, 0xffcc00, 0x33ff66, 0x00ccff,
+          0xff44aa, 0xaa22ff, 0x00ffaa, 0xff3333, 0x44ddff,
+          0xff9900, 0x66ff33, 0xee33ff, 0x00ff88, 0xffdd33,
+        ];
+        const randColor = flashyColors[Math.floor(Math.random() * flashyColors.length)];
+        const mat = new THREE.MeshStandardMaterial({
+          color: randColor,
+          roughness: 0.35,
+          metalness: 0.1,
+          side: THREE.DoubleSide,
+        });
 
         // Center the geometry around origin
         geom.center();
@@ -1526,6 +1518,12 @@ function makePirateEntity(idx) {
   return pirate;
 }
 
+const FLASHY_COLORS = [
+  0xff2255, 0xff6600, 0xffcc00, 0x33ff66, 0x00ccff,
+  0xff44aa, 0xaa22ff, 0x00ffaa, 0xff3333, 0x44ddff,
+  0xff9900, 0x66ff33, 0xee33ff, 0x00ff88, 0xffdd33,
+];
+
 function addGarbageMesh(g) {
   let mesh;
   if (g.fbxIdx >= 0 && garbageFBXLoaded && garbageFBXMeshes[g.fbxIdx]) {
@@ -1533,6 +1531,9 @@ function addGarbageMesh(g) {
     mesh = fbxData.mesh.clone();
     mesh.scale.setScalar(fbxData.scale);
     mesh.castShadow = true;
+    // Give each spawned piece a random flashy color
+    const rc = FLASHY_COLORS[Math.floor(Math.random() * FLASHY_COLORS.length)];
+    mesh.material = new THREE.MeshStandardMaterial({ color: rc, roughness: 0.35, metalness: 0.1, side: THREE.DoubleSide });
   } else {
     mesh = createProceduralGarbage(g.type);
   }
