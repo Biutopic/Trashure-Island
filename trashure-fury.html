@@ -888,18 +888,38 @@ function checkBoatCollisions(players, now) {
       const a = players[i], b = players[j];
       const hit = obbOverlap(boatOBB(a), boatOBB(b));
       if (hit) {
+        // --- HARD SEPARATION: always push boats fully apart ---
+        // Compute direction between centers
+        let sepX = a.x - b.x;
+        let sepZ = a.z - b.z;
+        const sepDist = Math.sqrt(sepX * sepX + sepZ * sepZ) || 0.01;
+        sepX /= sepDist;
+        sepZ /= sepDist;
+
+        // Push each boat out by half the overlap + extra margin
+        const overlapMag = Math.sqrt(hit.pushX * hit.pushX + hit.pushZ * hit.pushZ);
+        const pushDist = overlapMag * 0.5 + 0.5; // half overlap + 0.5 margin
+        a.x += sepX * pushDist;
+        a.z += sepZ * pushDist;
+        b.x -= sepX * pushDist;
+        b.z -= sepZ * pushDist;
+
+        // --- DAMAGE only applies with invuln cooldown ---
         events.push(...applyCollision(a, b, now));
 
-        // Harder push — boats get knocked apart significantly
+        // --- KNOCKBACK on top of separation ---
         const aSpeed = Math.sqrt(a.vx * a.vx + a.vz * a.vz);
         const bSpeed = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
-        const impactForce = COLLISION_PUSH_FORCE + (aSpeed + bSpeed) * 0.15;
+        const impactForce = COLLISION_PUSH_FORCE + (aSpeed + bSpeed) * 0.2;
 
         const total = a.boatLevel + b.boatLevel;
         const ar = b.boatLevel / total;
         const br = a.boatLevel / total;
-        a.x += hit.pushX * ar * impactForce;  a.z += hit.pushZ * ar * impactForce;
-        b.x -= hit.pushX * br * impactForce;  b.z -= hit.pushZ * br * impactForce;
+        a.x += sepX * ar * impactForce;
+        a.z += sepZ * ar * impactForce;
+        b.x -= sepX * br * impactForce;
+        b.z -= sepZ * br * impactForce;
+
         spawnSplash((a.x + b.x) / 2, (a.z + b.z) / 2);
       }
     }
