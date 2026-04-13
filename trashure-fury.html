@@ -493,15 +493,14 @@ const CAMERA_HEIGHT = 12;
 const CAMERA_FOLLOW_DISTANCE = 26;
 const CAMERA_LOOK_Y = -4;
 
-// Collision boxes — match visible hull of GLTF boat at scale 10.0
 const BOAT_COLLISION_EXTENTS = {
-  1: { halfW: 1.5,  halfL: 3.5  },
-  2: { halfW: 1.7,  halfL: 4.0  },
-  3: { halfW: 1.9,  halfL: 4.5  },
-  4: { halfW: 2.1,  halfL: 5.0  },
-  5: { halfW: 2.4,  halfL: 5.5  },
+  1: { halfW: 0.8,  halfL: 2.0  },
+  2: { halfW: 0.9,  halfL: 2.3  },
+  3: { halfW: 1.0,  halfL: 2.6  },
+  4: { halfW: 1.15, halfL: 3.0  },
+  5: { halfW: 1.3,  halfL: 3.4  },
 };
-const GARBAGE_COLLECT_MARGIN = 2.0;
+const GARBAGE_COLLECT_MARGIN = 1.5;
 
 const BOT_COUNT = 1;
 const BOT_NAMES = ['Hydronaute', 'Coral', 'Marlin', 'Triton', 'Dory', 'Splash', 'Reef', 'Bubbles'];
@@ -510,7 +509,7 @@ const PIRATE_COUNT = 1;
 const PIRATE_CHASE_DURATION = 20;
 const PIRATE_SPEED = 10;
 const PIRATE_TURN_SPEED = 2.0;
-const PIRATE_COLLISION_EXTENTS = { halfW: 2.5, halfL: 6.0 };
+const PIRATE_COLLISION_EXTENTS = { halfW: 1.0, halfL: 2.7 };
 const PIRATE_COLLISION_DAMAGE = 25;
 
 const PIRATE_BOMB_DAMAGE = 15;
@@ -880,8 +879,6 @@ function applyCollision(a, b, now) {
   return events;
 }
 
-const COLLISION_PUSH_FORCE = 3.5; // multiplier for harder knockback
-
 function checkBoatCollisions(players, now) {
   const events = [];
   for (let i = 0; i < players.length; i++) {
@@ -889,38 +886,14 @@ function checkBoatCollisions(players, now) {
       const a = players[i], b = players[j];
       const hit = obbOverlap(boatOBB(a), boatOBB(b));
       if (hit) {
-        // --- HARD SEPARATION: always push boats fully apart ---
-        // Compute direction between centers
-        let sepX = a.x - b.x;
-        let sepZ = a.z - b.z;
-        const sepDist = Math.sqrt(sepX * sepX + sepZ * sepZ) || 0.01;
-        sepX /= sepDist;
-        sepZ /= sepDist;
-
-        // Push each boat out by half the overlap + extra margin
-        const overlapMag = Math.sqrt(hit.pushX * hit.pushX + hit.pushZ * hit.pushZ);
-        const pushDist = overlapMag * 0.55 + 0.3; // half overlap + small margin
-        a.x += sepX * pushDist;
-        a.z += sepZ * pushDist;
-        b.x -= sepX * pushDist;
-        b.z -= sepZ * pushDist;
-
-        // --- DAMAGE only applies with invuln cooldown ---
         events.push(...applyCollision(a, b, now));
 
-        // --- KNOCKBACK on top of separation ---
-        const aSpeed = Math.sqrt(a.vx * a.vx + a.vz * a.vz);
-        const bSpeed = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
-        const impactForce = COLLISION_PUSH_FORCE + (aSpeed + bSpeed) * 0.2;
-
+        // Natural push: separate along overlap axis, weighted by boat level
         const total = a.boatLevel + b.boatLevel;
         const ar = b.boatLevel / total;
         const br = a.boatLevel / total;
-        a.x += sepX * ar * impactForce;
-        a.z += sepZ * ar * impactForce;
-        b.x -= sepX * br * impactForce;
-        b.z -= sepZ * br * impactForce;
-
+        a.x += hit.pushX * ar;  a.z += hit.pushZ * ar;
+        b.x -= hit.pushX * br;  b.z -= hit.pushZ * br;
         spawnSplash((a.x + b.x) / 2, (a.z + b.z) / 2);
       }
     }
