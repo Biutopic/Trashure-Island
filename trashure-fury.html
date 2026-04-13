@@ -353,11 +353,39 @@
     }
     #low-hp-warning.active { animation: warning-pulse 1.5s infinite; }
 
+    /* ---- LOADING SCREEN ---- */
+    #loading-screen {
+      position: fixed; inset: 0; z-index: 100;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: linear-gradient(180deg, #0a1628 0%, #0d2137 50%, #0a1628 100%);
+      font-family: var(--font-heading); color: #e0f0ff;
+    }
+    #loading-screen .title { font-size: 2rem; font-weight: 900; color: var(--primary); margin-bottom: 20px; }
+    #loading-screen .bar-outer {
+      width: 300px; height: 12px; border-radius: 6px;
+      background: rgba(255,255,255,0.1); overflow: hidden;
+      border: 1px solid rgba(0,200,200,0.3);
+    }
+    #loading-screen .bar-inner {
+      height: 100%; width: 0%; border-radius: 6px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      transition: width 0.3s ease;
+    }
+    #loading-screen .status { margin-top: 12px; font-size: 0.85rem; opacity: 0.7; }
+
     /* ---- hidden ---- */
     [hidden] { display: none !important; }
   </style>
 </head>
 <body>
+
+<!-- ======== LOADING SCREEN ======== -->
+<div id="loading-screen">
+  <div class="title">TRASHURE FURY</div>
+  <div class="bar-outer"><div class="bar-inner" id="loading-bar"></div></div>
+  <div class="status" id="loading-status">Loading models...</div>
+</div>
 
 <!-- ======== START SCREEN ======== -->
 <div id="start-screen">
@@ -1549,6 +1577,25 @@ function createProceduralGarbage(type) {
   return g;
 }
 
+// -- Loading progress --
+const loadingBar = document.getElementById('loading-bar');
+const loadingStatus = document.getElementById('loading-status');
+let modelsLoadedCount = 0;
+const TOTAL_MODELS = 4; // boat, pirate, bomb, FBX plastic
+
+function onModelProgress(name) {
+  modelsLoadedCount++;
+  const pct = Math.round((modelsLoadedCount / TOTAL_MODELS) * 100);
+  loadingBar.style.width = pct + '%';
+  loadingStatus.textContent = name + ' loaded (' + modelsLoadedCount + '/' + TOTAL_MODELS + ')';
+  if (modelsLoadedCount >= TOTAL_MODELS) {
+    loadingStatus.textContent = 'All models loaded!';
+    setTimeout(() => {
+      document.getElementById('loading-screen').style.display = 'none';
+    }, 400);
+  }
+}
+
 // -- Load GLTF models (with fallback flags) --
 gltfLoader.load(
   './public/assets/renaud8000.glb',
@@ -1558,21 +1605,23 @@ gltfLoader.load(
     boatModelTemplate.scale.setScalar(10.0);
     boatModelTemplate.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
     modelsReady.boat = true;
+    onModelProgress('Boat');
   },
   undefined,
-  () => { console.warn('Boat GLTF load failed — using procedural fallback'); modelsReady.boat = true; }
+  () => { console.warn('Boat GLTF load failed — using procedural fallback'); modelsReady.boat = true; onModelProgress('Boat (fallback)'); }
 );
 
 gltfLoader.load(
-  './public/assets/low-poly_pirate_ship/scene.gltf',
+  './public/assets/monster_ship/monster_ship.glb',
   (gltf) => {
     pirateModelTemplate = gltf.scene;
-    pirateModelTemplate.rotation.set(0, 3 * Math.PI / 8, 0);
     pirateModelTemplate.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
     modelsReady.pirate = true;
+    onModelProgress('Monster Ship');
+    console.log('Monster ship loaded');
   },
   undefined,
-  () => { console.warn('Pirate GLTF load failed — using procedural fallback'); modelsReady.pirate = true; }
+  () => { console.warn('Monster ship load failed — using procedural fallback'); modelsReady.pirate = true; onModelProgress('Monster Ship (fallback)'); }
 );
 
 gltfLoader.load(
@@ -1582,9 +1631,10 @@ gltfLoader.load(
     bombModelTemplate.scale.setScalar(0.25);
     bombModelTemplate.traverse(c => { if (c.isMesh) { c.castShadow = true; } });
     modelsReady.bomb = true;
+    onModelProgress('Bombs');
   },
   undefined,
-  () => { console.warn('Bomb GLTF load failed — using procedural fallback'); modelsReady.bomb = true; }
+  () => { console.warn('Bomb GLTF load failed — using procedural fallback'); modelsReady.bomb = true; onModelProgress('Bombs (fallback)'); }
 );
 
 // -- Plastic containers FBX --
@@ -1641,12 +1691,14 @@ fbxLoader.load(
       garbageFBXMeshes = meshGroups;
       garbageFBXLoaded = true;
       console.log('Plastic containers FBX loaded, found ' + garbageFBXMeshes.length + ' meshes');
+      onModelProgress('Plastic Containers');
     } else {
       console.warn('FBX loaded but no meshes found, falling back to procedural garbage');
+      onModelProgress('Plastic (fallback)');
     }
   },
   undefined,
-  (err) => { console.warn('Plastic containers FBX load failed:', err); }
+  (err) => { console.warn('Plastic containers FBX load failed:', err); onModelProgress('Plastic (fallback)'); }
 );
 
 // ============================================================
@@ -1722,11 +1774,12 @@ function makePirateEntity(idx) {
   };
   pirates.push(pirate);
 
-  const scale = isFlagship ? FLAGSHIP_SCALE : 0.1;
   let mesh;
   if (pirateModelTemplate) {
     mesh = pirateModelTemplate.clone();
-    mesh.scale.setScalar(scale);
+    // Monster ship from Blender — adjust scale to look right on water
+    const monsterScale = isFlagship ? 4.0 : 2.0;
+    mesh.scale.setScalar(monsterScale);
   } else {
     mesh = createProceduralPirate();
     mesh.scale.setScalar(isFlagship ? 1.5 : 0.5);
@@ -2435,7 +2488,7 @@ function gameLoop(timestamp) {
       const wy   = getWaveHeight(pirate.x, pirate.z, gameTime);
       const tilt = getWaveTilt(pirate.x, pirate.z, gameTime);
       mesh.position.set(pirate.x, wy - 1.5, pirate.z);
-      const baseYRot = pirateModelTemplate ? (3 * Math.PI / 8) : 0;
+      const baseYRot = 0;
       mesh.rotation.set(tilt.tiltX, pirate.rotation + baseYRot, tilt.tiltZ);
     }
     const ring = pirateRings.get(pirate.id);
