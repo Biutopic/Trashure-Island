@@ -493,14 +493,15 @@ const CAMERA_HEIGHT = 12;
 const CAMERA_FOLLOW_DISTANCE = 26;
 const CAMERA_LOOK_Y = -4;
 
+// Collision boxes sized to match the GLTF boat model at scale 10.0
 const BOAT_COLLISION_EXTENTS = {
-  1: { halfW: 0.6,  halfL: 1.5  },
-  2: { halfW: 0.69, halfL: 1.73 },
-  3: { halfW: 0.78, halfL: 1.95 },
-  4: { halfW: 0.90, halfL: 2.25 },
-  5: { halfW: 1.02, halfL: 2.55 },
+  1: { halfW: 2.5,  halfL: 5.0  },
+  2: { halfW: 2.9,  halfL: 5.8  },
+  3: { halfW: 3.2,  halfL: 6.5  },
+  4: { halfW: 3.6,  halfL: 7.2  },
+  5: { halfW: 4.0,  halfL: 8.0  },
 };
-const GARBAGE_COLLECT_MARGIN = 1.0;
+const GARBAGE_COLLECT_MARGIN = 3.0;
 
 const BOT_COUNT = 1;
 const BOT_NAMES = ['Hydronaute', 'Coral', 'Marlin', 'Triton', 'Dory', 'Splash', 'Reef', 'Bubbles'];
@@ -509,7 +510,7 @@ const PIRATE_COUNT = 1;
 const PIRATE_CHASE_DURATION = 20;
 const PIRATE_SPEED = 10;
 const PIRATE_TURN_SPEED = 2.0;
-const PIRATE_COLLISION_EXTENTS = { halfW: 1.0, halfL: 2.7 };
+const PIRATE_COLLISION_EXTENTS = { halfW: 4.0, halfL: 10.0 };
 const PIRATE_COLLISION_DAMAGE = 25;
 
 const PIRATE_BOMB_DAMAGE = 15;
