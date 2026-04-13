@@ -429,6 +429,7 @@ import { Water } from 'three/addons/objects/Water.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { AnimationMixer } from 'three';
 
 // ============================================================
 // 1. CONSTANTS
@@ -560,6 +561,8 @@ let shark = {
 };
 let sharkMesh = null;
 let sharkModelTemplate = null;
+let sharkAnimClips = null;
+let sharkMixer = null;
 let sharkRing = null;
 
 const botBrains = new Map();
@@ -1084,13 +1087,19 @@ function updateShark(dt, now) {
   }
 
   // Update mesh
+  // Update shark animation
+  if (sharkMixer) sharkMixer.update(dt);
+
   if (sharkMesh) {
-    const wy = getWaveHeight(shark.x, shark.z, gameTime);
-    sharkMesh.position.set(shark.x, wy - 0.5, shark.z);
-    sharkMesh.rotation.set(0, shark.rotation + Math.sin(gameTime * 3) * 0.1, 0); // wobble
+    const wy = getWaveHeight(shark.x, shark.z, now);
+    // Half submerged: body center well below waterline, dorsal fin pokes out
+    sharkMesh.position.set(shark.x, wy - 1.8, shark.z);
+    // Wobble side to side as it swims
+    const wobble = Math.sin(now * 3) * 0.08;
+    sharkMesh.rotation.set(0, shark.rotation + wobble, 0);
   }
   if (sharkRing) {
-    sharkRing.position.set(shark.x, getWaveHeight(shark.x, shark.z, gameTime) - 0.3, shark.z);
+    sharkRing.position.set(shark.x, getWaveHeight(shark.x, shark.z, now) - 0.2, shark.z);
   }
 }
 
@@ -1432,9 +1441,12 @@ gltfLoader.load(
   './public/assets/shark/shark.gltf',
   (gltf) => {
     sharkModelTemplate = gltf.scene;
-    sharkModelTemplate.scale.setScalar(2.0);
     sharkModelTemplate.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+    if (gltf.animations && gltf.animations.length > 0) {
+      sharkAnimClips = gltf.animations;
+    }
     modelsReady.shark = true;
+    console.log('Shark loaded, animations:', gltf.animations?.length || 0);
   },
   undefined,
   () => { console.warn('Shark GLTF load failed — using procedural fallback'); modelsReady.shark = true; }
@@ -1445,22 +1457,74 @@ const fbxLoader = new FBXLoader();
 fbxLoader.load(
   './public/assets/plastic_containers/m3d_plasticcontainers_fbx.fbx',
   (fbxScene) => {
+    // Collect individual mesh groups as cloneable items
+    const meshGroups = [];
     fbxScene.traverse(c => {
-      if (c.isMesh) {
-        const size = classifyGarbageSize(c.name);
+      if (c.isMesh && c.geometry) {
+        // Bake world matrix into geometry so clones are standalone
+        c.updateWorldMatrix(true, false);
+        const geom = c.geometry.clone();
+        geom.applyMatrix4(c.matrixWorld);
+        geom.computeBoundingBox();
+
+        const box = geom.boundingBox;
+        const sizeVec = new THREE.Vector3();
+        box.getSize(sizeVec);
+        // FBX is in cm, so dims are large numbers
+        const maxDim = Math.max(sizeVec.x, sizeVec.y, sizeVec.z);
+
+        const size = maxDim < 20 ? 'small' : maxDim < 50 ? 'medium' : 'large';
         const points = GARBAGE_SIZE_POINTS[size];
-        // Determine scale based on size
-        let scale = 0.02;
-        if (size === 'small') scale = 0.01;
-        else if (size === 'large') scale = 0.05;
-        garbageFBXMeshes.push({ mesh: c, size, points, name: c.name, scale });
+
+        // Scale: we want items ~0.6-1.8 world units tall
+        // If maxDim is e.g. 30cm in FBX, we want 30 * scale ≈ 1.0
+        let displayScale;
+        if (size === 'small')       displayScale = 0.03;
+        else if (size === 'medium') displayScale = 0.025;
+        else                        displayScale = 0.02;
+
+        // Clone material to avoid shared state issues, add fallback
+        let mat;
+        if (c.material) {
+          mat = Array.isArray(c.material)
+            ? c.material.map(m => m.clone())
+            : c.material.clone();
+        } else {
+          mat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.6 });
+        }
+
+        // Ensure materials are visible (some FBX mats have zero opacity or are transparent)
+        const fixMat = m => {
+          if (m.opacity < 0.1) m.opacity = 1.0;
+          m.transparent = m.opacity < 1.0;
+          m.side = THREE.DoubleSide;
+          // If no color map, give a visible base color
+          if (!m.map && (!m.color || m.color.getHex() === 0x000000)) {
+            m.color = new THREE.Color(0xbb9966);
+          }
+        };
+        if (Array.isArray(mat)) mat.forEach(fixMat); else fixMat(mat);
+
+        // Center the geometry around origin
+        geom.center();
+
+        const newMesh = new THREE.Mesh(geom, mat);
+        newMesh.castShadow = true;
+
+        meshGroups.push({ mesh: newMesh, size, points, name: c.name, scale: displayScale });
       }
     });
-    garbageFBXLoaded = true;
-    console.log('Plastic containers FBX loaded, found ' + garbageFBXMeshes.length + ' meshes');
+
+    if (meshGroups.length > 0) {
+      garbageFBXMeshes = meshGroups;
+      garbageFBXLoaded = true;
+      console.log('Plastic containers FBX loaded, found ' + garbageFBXMeshes.length + ' meshes, dims sampled');
+    } else {
+      console.warn('FBX loaded but no meshes found, falling back to procedural garbage');
+    }
   },
   undefined,
-  () => { console.warn('Plastic containers FBX load failed — using procedural fallback'); }
+  (err) => { console.warn('Plastic containers FBX load failed:', err); }
 );
 
 // ============================================================
@@ -1966,25 +2030,37 @@ function initGame() {
   // Shark
   if (sharkModelTemplate) {
     sharkMesh = sharkModelTemplate.clone();
-    sharkMesh.scale.setScalar(2.0);
+    sharkMesh.scale.setScalar(12.0); // shark GLTF is very small natively
+    // Start animation if available
+    if (sharkAnimClips && sharkAnimClips.length > 0) {
+      sharkMixer = new THREE.AnimationMixer(sharkMesh);
+      for (const clip of sharkAnimClips) {
+        const action = sharkMixer.clipAction(clip);
+        action.play();
+      }
+    }
   } else {
     // Procedural fallback: grey elongated shape
     const sg = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.ConeGeometry(0.5, 4, 8), new THREE.MeshStandardMaterial({color: 0x666688}));
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.8, 6, 8), new THREE.MeshStandardMaterial({color: 0x666688, roughness: 0.5}));
     body.rotation.x = Math.PI / 2;
     sg.add(body);
-    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.5, 4), new THREE.MeshStandardMaterial({color: 0x555577}));
-    fin.position.y = 0.8;
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2.5, 4), new THREE.MeshStandardMaterial({color: 0x555577}));
+    fin.position.y = 1.2;
     fin.rotation.z = Math.PI;
     sg.add(fin);
+    const tailFin = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.5, 4), new THREE.MeshStandardMaterial({color: 0x555577}));
+    tailFin.position.set(0, 0.3, -3);
+    tailFin.rotation.x = -0.3;
+    sg.add(tailFin);
     sharkMesh = sg;
   }
   shark.x = -50; shark.z = -50;
-  sharkMesh.position.set(shark.x, -0.5, shark.z);
+  sharkMesh.position.set(shark.x, -1.5, shark.z);
   scene.add(sharkMesh);
 
-  // Shark ring (blue)
-  const srg = new THREE.RingGeometry(2.0, 2.3, 32);
+  // Shark ring (blue, bigger)
+  const srg = new THREE.RingGeometry(3.5, 4.0, 32);
   const srm = new THREE.MeshBasicMaterial({color: 0x4488ff, side: THREE.DoubleSide, transparent: true, opacity: 0.3});
   sharkRing = new THREE.Mesh(srg, srm);
   sharkRing.rotation.x = -Math.PI / 2;
@@ -2130,7 +2206,7 @@ function gameLoop(timestamp) {
     if (mesh) {
       const wy   = getWaveHeight(pirate.x, pirate.z, gameTime);
       const tilt = getWaveTilt(pirate.x, pirate.z, gameTime);
-      mesh.position.set(pirate.x, wy + 0.8, pirate.z);
+      mesh.position.set(pirate.x, wy - 1.5, pirate.z);
       const baseYRot = pirateModelTemplate ? (3 * Math.PI / 8) : 0;
       mesh.rotation.set(tilt.tiltX, pirate.rotation + baseYRot, tilt.tiltZ);
     }
