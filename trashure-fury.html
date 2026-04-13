@@ -984,42 +984,103 @@ function regenHealth(player, now, dt, upgrades) {
 // ============================================================
 // 5. BOT AI
 // ============================================================
+// Hydronaute (bot_0) = pacific, avoids collisions, collects garbage
+// Other bots = aggressive, boost-ram players like real opponents
+
 function getBotBrain(id) {
   if (!botBrains.has(id)) botBrains.set(id, {
     targetGarbageId: null, decisionTimer: 0,
-    attackTargetId: null, attackTimer: 0,
-    mode: 'collect', // 'collect' or 'attack'
+    attackTargetId: null,
+    mode: 'collect', // 'collect', 'attack', or 'evade'
   });
   return botBrains.get(id);
 }
 
-function computeBotInput(bot, dt) {
+// --- HYDRONAUTE AI: pacific, avoids crashes, collects garbage ---
+function computeHydronauteInput(bot, dt) {
   const brain = getBotBrain(bot.id);
   brain.decisionTimer -= dt;
-  brain.attackTimer -= dt;
   const inp = { forward: true, backward: false, left: false, right: false, boost: false };
 
-  // Decide mode: attack nearby players when we have boost, otherwise collect
-  if (brain.decisionTimer <= 0) {
-    brain.decisionTimer = 1.5 + Math.random() * 2;
-    brain.mode = 'collect';
+  // Check for nearby threats — evade if anything is close
+  const threats = [localPlayer, ...bots, ...pirates].filter(p => p.id !== bot.id);
+  let closestThreat = null, closestDist = Infinity;
+  for (const t of threats) {
+    const dx = bot.x - t.x, dz = bot.z - t.z;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d < closestDist) { closestDist = d; closestThreat = t; }
+  }
 
-    // Look for nearby players to attack (if we have boost energy)
-    if (bot.boostEnergy > 0.3) {
+  // Evade if something is within 15 units
+  if (closestThreat && closestDist < 15) {
+    brain.mode = 'evade';
+    // Steer AWAY from the threat
+    const dx = bot.x - closestThreat.x, dz = bot.z - closestThreat.z;
+    const awayAngle = Math.atan2(dx, dz);
+    let diff = awayAngle - bot.rotation;
+    while (diff >  Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    if (diff > 0.1) inp.left = true;
+    else if (diff < -0.1) inp.right = true;
+    // Boost away if very close
+    if (closestDist < 8 && bot.boostEnergy > 0.1) inp.boost = true;
+    return inp;
+  }
+
+  brain.mode = 'collect';
+  // Pick nearest garbage
+  if (brain.decisionTimer <= 0 || !garbage.find(g => g.id === brain.targetGarbageId)) {
+    brain.decisionTimer = 1.0 + Math.random() * 1.5;
+    let nearest = null, nd = Infinity;
+    for (const g of garbage) {
+      const dx = bot.x - g.x, dz = bot.z - g.z;
+      const d = dx * dx + dz * dz;
+      if (d < nd) { nd = d; nearest = g; }
+    }
+    brain.targetGarbageId = nearest ? nearest.id : null;
+  }
+
+  const tgt = garbage.find(g => g.id === brain.targetGarbageId);
+  if (tgt) {
+    const dx = tgt.x - bot.x, dz = tgt.z - bot.z;
+    let diff = Math.atan2(dx, dz) - bot.rotation;
+    while (diff >  Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    if (diff > 0.1) inp.left = true;
+    else if (diff < -0.1) inp.right = true;
+  }
+  return inp;
+}
+
+// --- AGGRESSIVE BOT AI: acts like a real player, attacks with boost ---
+function computeAggressiveInput(bot, dt) {
+  const brain = getBotBrain(bot.id);
+  brain.decisionTimer -= dt;
+  const inp = { forward: true, backward: false, left: false, right: false, boost: false };
+
+  if (brain.decisionTimer <= 0) {
+    brain.decisionTimer = 1.0 + Math.random() * 2;
+
+    // Always look for someone to attack when we have boost
+    if (bot.boostEnergy > 0.25) {
       const allTargets = [localPlayer, ...bots].filter(p => p.id !== bot.id && p.health > 0);
       let nearestEnemy = null, ned = Infinity;
       for (const p of allTargets) {
         const dx = bot.x - p.x, dz = bot.z - p.z;
         const d = dx * dx + dz * dz;
-        if (d < ned && d < 900) { ned = d; nearestEnemy = p; } // within 30 units
+        if (d < ned && d < 1600) { ned = d; nearestEnemy = p; } // within 40 units
       }
-      if (nearestEnemy && Math.random() < 0.4) { // 40% chance to go aggressive
+      if (nearestEnemy && Math.random() < 0.6) { // 60% chance to attack
         brain.mode = 'attack';
         brain.attackTargetId = nearestEnemy.id;
+      } else {
+        brain.mode = 'collect';
       }
+    } else {
+      brain.mode = 'collect'; // low boost, go collect
     }
 
-    // Pick garbage target
+    // Pick garbage target for collect mode
     if (brain.mode === 'collect') {
       let nearest = null, nd = Infinity;
       for (const g of garbage) {
@@ -1032,7 +1093,6 @@ function computeBotInput(bot, dt) {
   }
 
   if (brain.mode === 'attack') {
-    // Chase and ram the target with boost
     const enemy = [localPlayer, ...bots].find(p => p.id === brain.attackTargetId);
     if (enemy && enemy.health > 0) {
       const dx = enemy.x - bot.x, dz = enemy.z - bot.z;
@@ -1042,19 +1102,19 @@ function computeBotInput(bot, dt) {
       while (diff < -Math.PI) diff += Math.PI * 2;
       if (diff > 0.1) inp.left = true;
       else if (diff < -0.1) inp.right = true;
-      // Boost when aimed at target and close enough
-      if (Math.abs(diff) < 0.4 && dist < 25 && bot.boostEnergy > 0.1) {
+      // Boost when aimed and closing in
+      if (Math.abs(diff) < 0.5 && dist < 30 && bot.boostEnergy > 0.1) {
         inp.boost = true;
       }
     } else {
-      brain.mode = 'collect'; // target dead or gone
+      brain.mode = 'collect';
+      brain.decisionTimer = 0;
     }
   }
 
   if (brain.mode === 'collect') {
-    // Also check if target garbage still exists
     if (!garbage.find(g => g.id === brain.targetGarbageId)) {
-      brain.decisionTimer = 0; // re-decide next frame
+      brain.decisionTimer = 0;
     }
     const tgt = garbage.find(g => g.id === brain.targetGarbageId);
     if (tgt) {
@@ -1067,6 +1127,13 @@ function computeBotInput(bot, dt) {
     }
   }
   return inp;
+}
+
+function computeBotInput(bot, dt) {
+  // Hydronaute (bot_0) is pacific — the AI we will train
+  if (bot.id === 'bot_0') return computeHydronauteInput(bot, dt);
+  // All other bots are aggressive players
+  return computeAggressiveInput(bot, dt);
 }
 
 // ============================================================
