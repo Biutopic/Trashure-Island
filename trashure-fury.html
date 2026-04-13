@@ -117,7 +117,6 @@
     .bar-boost { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
     .bar-boost.mid { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
     .bar-boost.low { background: linear-gradient(90deg, #ef4444, #f87171); }
-    .bar-plastic { background: linear-gradient(90deg, #eab308, #facc15); }
     @keyframes pulse-bar { from { opacity: 1; } to { opacity: 0.5; } }
     .hud-stat {
       font-size: 0.7rem; color: var(--muted-fg); margin-top: 6px;
@@ -351,8 +350,6 @@
     <div class="hud-bar-wrap"><div class="hud-bar-fill bar-health" id="hud-hp" style="width:100%"></div></div>
     <div class="hud-bar-label">Boost</div>
     <div class="hud-bar-wrap"><div class="hud-bar-fill bar-boost" id="hud-boost" style="width:100%"></div></div>
-    <div class="hud-bar-label">Plastic</div>
-    <div class="hud-bar-wrap"><div class="hud-bar-fill bar-plastic" id="hud-plastic" style="width:0%"></div></div>
     <div class="hud-stat">Total: <span id="hud-total">0</span></div>
   </div>
 
@@ -489,7 +486,7 @@ const PIRATE_BOMB_FLIGHT_TIME = 2.5;
 const PIRATE_BOMB_ARC_HEIGHT = 10;
 
 const BOOST_DRAIN_RATE = 0.45;
-const BOOST_RECHARGE_RATE = 0.2;
+const BOOST_PER_PICKUP = 0.12;  // boost gained per plastic pickup
 
 const UPGRADE_SCREEN_DURATION = 3;
 const SOLAR_PANEL_REGEN_MULTIPLIER = 2.5;
@@ -632,6 +629,7 @@ function createGarbageItem() {
     size = garbageFBXMeshes[fbxIdx].size;
     points = garbageFBXMeshes[fbxIdx].points;
   }
+  const isHeal = Math.random() < PINK_CHANCE;
   return {
     id: 'g_' + (garbageIdCounter++),
     x: Math.cos(angle) * dist,
@@ -641,6 +639,7 @@ function createGarbageItem() {
     fbxIdx,
     size,
     points,
+    isHeal,
   };
 }
 
@@ -669,9 +668,8 @@ function movePlayer(player, inp, dt, upgrades) {
 
   if (boosting) {
     player.boostEnergy = Math.max(0, player.boostEnergy - BOOST_DRAIN_RATE * dt);
-  } else {
-    player.boostEnergy = Math.min(1, player.boostEnergy + BOOST_RECHARGE_RATE * dt);
   }
+  // No auto-regen — boost is earned by collecting plastic
 
   const boostMul = boosting ? 1.5 : 1;
   const dx = Math.sin(player.rotation) * speed * moveDir * boostMul * dt;
@@ -749,6 +747,15 @@ function checkGarbageCollection(player, upgrades) {
       player.plasticCount  += pts;
       player.totalCollected += pts;
 
+      // Boost reward — plastic fuels your boost
+      player.boostEnergy = Math.min(1, player.boostEnergy + BOOST_PER_PICKUP * pts);
+
+      // Pink plastic heals
+      if (g.isHeal) {
+        player.health = Math.min(MAX_HEALTH, player.health + HP_PER_PINK_PICKUP);
+        spawnFloatingText(g.x, g.z, '+' + HP_PER_PINK_PICKUP + ' HP', '#ff66aa');
+      }
+
       // Combo
       comboCount++;
       comboTimer = COMBO_WINDOW;
@@ -756,7 +763,7 @@ function checkGarbageCollection(player, upgrades) {
       if (comboCount > 1) {
         spawnFloatingText(g.x, g.z, '+' + pts + ' x' + cmul + '!', '#ffd93d');
       } else {
-        spawnFloatingText(g.x, g.z, '+' + pts + ' plastic!', '#ffd93d');
+        spawnFloatingText(g.x, g.z, '+' + pts, '#ffd93d');
       }
 
       removeGarbageMesh(g.id);
@@ -1384,17 +1391,12 @@ fbxLoader.load(
         else if (size === 'medium') displayScale = 0.025;
         else                        displayScale = 0.02;
 
-        // Flashy colorful plastic materials
-        const flashyColors = [
-          0xff2255, 0xff6600, 0xffcc00, 0x33ff66, 0x00ccff,
-          0xff44aa, 0xaa22ff, 0x00ffaa, 0xff3333, 0x44ddff,
-          0xff9900, 0x66ff33, 0xee33ff, 0x00ff88, 0xffdd33,
-        ];
-        const randColor = flashyColors[Math.floor(Math.random() * flashyColors.length)];
+        // Realistic plastic color (actual color assigned at spawn time in addGarbageMesh)
+        const randColor = PLASTIC_COLORS[Math.floor(Math.random() * PLASTIC_COLORS.length)];
         const mat = new THREE.MeshStandardMaterial({
           color: randColor,
-          roughness: 0.35,
-          metalness: 0.1,
+          roughness: 0.4,
+          metalness: 0.05,
           side: THREE.DoubleSide,
         });
 
@@ -1518,11 +1520,19 @@ function makePirateEntity(idx) {
   return pirate;
 }
 
-const FLASHY_COLORS = [
-  0xff2255, 0xff6600, 0xffcc00, 0x33ff66, 0x00ccff,
-  0xff44aa, 0xaa22ff, 0x00ffaa, 0xff3333, 0x44ddff,
-  0xff9900, 0x66ff33, 0xee33ff, 0x00ff88, 0xffdd33,
+// Realistic plastic colors (bottles, containers, bags, caps, etc.)
+const PLASTIC_COLORS = [
+  0x2277cc, 0x3399dd, 0x1a5c8a,  // blue bottles
+  0xcc3333, 0xaa2222, 0xdd4444,  // red containers
+  0x228833, 0x33aa55, 0x1a6633,  // green bottles
+  0xdddd33, 0xccbb22, 0xeedd44,  // yellow jugs
+  0xdd8822, 0xcc6611, 0xee9933,  // orange containers
+  0xeeeeee, 0xcccccc, 0xdddddd,  // white/translucent
+  0x995522, 0x774411,             // brown
 ];
+const PINK_HP_COLOR = 0xff66aa;  // pink = health pickup
+const HP_PER_PINK_PICKUP = 15;
+const PINK_CHANCE = 0.15;  // 15% of spawns are pink (heal)
 
 function addGarbageMesh(g) {
   let mesh;
@@ -1531,9 +1541,9 @@ function addGarbageMesh(g) {
     mesh = fbxData.mesh.clone();
     mesh.scale.setScalar(fbxData.scale);
     mesh.castShadow = true;
-    // Give each spawned piece a random flashy color
-    const rc = FLASHY_COLORS[Math.floor(Math.random() * FLASHY_COLORS.length)];
-    mesh.material = new THREE.MeshStandardMaterial({ color: rc, roughness: 0.35, metalness: 0.1, side: THREE.DoubleSide });
+    // Pink = heal pickup, otherwise realistic plastic color
+    const rc = g.isHeal ? PINK_HP_COLOR : PLASTIC_COLORS[Math.floor(Math.random() * PLASTIC_COLORS.length)];
+    mesh.material = new THREE.MeshStandardMaterial({ color: rc, roughness: 0.4, metalness: 0.05, side: THREE.DoubleSide });
   } else {
     mesh = createProceduralGarbage(g.type);
   }
@@ -1778,7 +1788,6 @@ window.addEventListener('keyup', (e) => {
 const hudNameEl    = document.getElementById('hud-name');
 const hudHpEl      = document.getElementById('hud-hp');
 const hudBoostEl   = document.getElementById('hud-boost');
-const hudPlasticEl = document.getElementById('hud-plastic');
 const hudTotalEl   = document.getElementById('hud-total');
 const lbRowsEl     = document.getElementById('lb-rows');
 const timerEl      = document.getElementById('timer-display');
@@ -1794,9 +1803,6 @@ function updateHUD() {
   const bPct = localPlayer.boostEnergy * 100;
   hudBoostEl.style.width = bPct + '%';
   hudBoostEl.className   = 'hud-bar-fill bar-boost' + (bPct < 30 ? ' low' : bPct < 60 ? ' mid' : '');
-
-  const thr = LEVEL_THRESHOLD_MAP[localPlayer.boatLevel] || 999;
-  hudPlasticEl.style.width = Math.min(100, localPlayer.plasticCount / thr * 100) + '%';
 
   hudTotalEl.textContent = localPlayer.totalCollected;
 }
@@ -1994,6 +2000,8 @@ function gameLoop(timestamp) {
         const bpts = g.points || 1;
         bot.plasticCount  += bpts;
         bot.totalCollected += bpts;
+        bot.boostEnergy = Math.min(1, bot.boostEnergy + BOOST_PER_PICKUP * bpts);
+        if (g.isHeal) bot.health = Math.min(MAX_HEALTH, bot.health + HP_PER_PINK_PICKUP);
         checkLevelUp(bot);
         removeGarbageMesh(g.id);
         garbage.splice(i, 1);
