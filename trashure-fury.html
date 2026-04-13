@@ -428,6 +428,7 @@ import * as THREE from 'three';
 import { Water } from 'three/addons/objects/Water.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
 // ============================================================
 // 1. CONSTANTS
@@ -474,7 +475,7 @@ const GARBAGE_COLLECT_MARGIN = 1.0;
 const BOT_COUNT = 1;
 const BOT_NAMES = ['Hydronaute', 'Coral', 'Marlin', 'Triton', 'Dory', 'Splash', 'Reef', 'Bubbles'];
 
-const PIRATE_COUNT = 2;
+const PIRATE_COUNT = 1;
 const PIRATE_CHASE_DURATION = 20;
 const PIRATE_SPEED = 10;
 const PIRATE_TURN_SPEED = 2.0;
@@ -550,6 +551,17 @@ const pirates = [];
 let bombs = [];
 let garbage = [];
 
+// Shark state
+let shark = {
+  x: 0, z: 50, rotation: 0, vx: 0, vz: 0,
+  targetId: null, chaseTimer: 0,
+  speed: 12, turnSpeed: 3.0,
+  damage: 20,
+};
+let sharkMesh = null;
+let sharkModelTemplate = null;
+let sharkRing = null;
+
 const botBrains = new Map();
 
 const input = { forward: false, backward: false, left: false, right: false, boost: false };
@@ -569,7 +581,11 @@ const splashParticles = [];
 let boatModelTemplate = null;
 let pirateModelTemplate = null;
 let bombModelTemplate = null;
-let modelsReady = { boat: false, pirate: false, bomb: false };
+let modelsReady = { boat: false, pirate: false, bomb: false, shark: false };
+
+// Garbage FBX model data
+let garbageFBXMeshes = []; // array of { mesh, size, points, name }
+let garbageFBXLoaded = false;
 
 // ============================================================
 // 3. WAVE UTILS
@@ -598,6 +614,20 @@ function getWaveTilt(x, z, time) {
 // ============================================================
 const GARBAGE_TYPES = ['water_bottle', 'canister', 'plastic_bucket', 'traffic_cone'];
 
+// Size-based points for FBX plastic containers
+const GARBAGE_SIZE_POINTS = {
+  small: 1,  // caps, small bottles
+  medium: 2, // bottles, canisters
+  large: 3,  // buckets, tanks
+};
+
+function classifyGarbageSize(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('cap') || n.includes('lid') || n.includes('small')) return 'small';
+  if (n.includes('bucket') || n.includes('tank') || n.includes('drum') || n.includes('large') || n.includes('container')) return 'large';
+  return 'medium'; // bottles, canisters, etc.
+}
+
 function randomGarbageType() {
   return GARBAGE_TYPES[Math.floor(Math.random() * GARBAGE_TYPES.length)];
 }
@@ -605,12 +635,23 @@ function randomGarbageType() {
 function createGarbageItem() {
   const angle = Math.random() * Math.PI * 2;
   const dist  = Math.random() * GARBAGE_WORLD_RADIUS;
+  let fbxIdx = -1;
+  let size = 'medium';
+  let points = 1;
+  if (garbageFBXLoaded && garbageFBXMeshes.length > 0) {
+    fbxIdx = Math.floor(Math.random() * garbageFBXMeshes.length);
+    size = garbageFBXMeshes[fbxIdx].size;
+    points = garbageFBXMeshes[fbxIdx].points;
+  }
   return {
     id: 'g_' + (garbageIdCounter++),
     x: Math.cos(angle) * dist,
     z: Math.sin(angle) * dist,
     type: randomGarbageType(),
     bobOffset: Math.random() * Math.PI * 2,
+    fbxIdx,
+    size,
+    points,
   };
 }
 
@@ -715,17 +756,18 @@ function checkGarbageCollection(player, upgrades) {
     const g = garbage[i];
     if (pointInOBB(g.x, g.z, obb, margin)) {
       collected.push(g.id);
-      player.plasticCount  += 1;
-      player.totalCollected += 1;
+      const pts = g.points || 1;
+      player.plasticCount  += pts;
+      player.totalCollected += pts;
 
       // Combo
       comboCount++;
       comboTimer = COMBO_WINDOW;
       const cmul = Math.min(comboCount, COMBO_MULTIPLIER_CAP);
       if (comboCount > 1) {
-        spawnFloatingText(g.x, g.z, '+1 x' + cmul + '!', '#ffd93d');
+        spawnFloatingText(g.x, g.z, '+' + pts + ' x' + cmul + '!', '#ffd93d');
       } else {
-        spawnFloatingText(g.x, g.z, '+1 plastic!', '#ffd93d');
+        spawnFloatingText(g.x, g.z, '+' + pts + ' plastic!', '#ffd93d');
       }
 
       removeGarbageMesh(g.id);
@@ -986,6 +1028,69 @@ function checkPiratePirateCollisions() {
         b.x -= hit.pushX * 0.5; b.z -= hit.pushZ * 0.5;
       }
     }
+  }
+}
+
+function updateShark(dt, now) {
+  // Pick target
+  shark.chaseTimer -= dt;
+  const allTargets = [localPlayer, ...bots];
+  if (shark.chaseTimer <= 0 || !allTargets.find(p => p.id === shark.targetId)) {
+    let nearest = null, nearestDist = Infinity;
+    for (const p of allTargets) {
+      const dx = shark.x - p.x, dz = shark.z - p.z;
+      const d = dx*dx + dz*dz;
+      if (d < nearestDist) { nearestDist = d; nearest = p; }
+    }
+    shark.targetId = nearest?.id || null;
+    shark.chaseTimer = 10;
+  }
+
+  // Steer toward target
+  const target = allTargets.find(p => p.id === shark.targetId);
+  if (target) {
+    const dx = target.x - shark.x, dz = target.z - shark.z;
+    const targetAngle = Math.atan2(dx, dz);
+    let diff = targetAngle - shark.rotation;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    const turnAmount = Math.min(Math.abs(diff), shark.turnSpeed * dt);
+    shark.rotation += Math.sign(diff) * turnAmount;
+  }
+
+  // Move
+  const mx = Math.sin(shark.rotation) * shark.speed * dt;
+  const mz = Math.cos(shark.rotation) * shark.speed * dt;
+  shark.x += mx; shark.z += mz;
+  shark.vx = mx/dt; shark.vz = mz/dt;
+
+  // Clamp to world
+  const dist = Math.sqrt(shark.x*shark.x + shark.z*shark.z);
+  if (dist > WORLD_RADIUS) { shark.x = shark.x/dist*WORLD_RADIUS; shark.z = shark.z/dist*WORLD_RADIUS; }
+
+  // Check collision with all players
+  const sharkOBB = { cx: shark.x, cz: shark.z, halfW: 1.0, halfL: 2.0, sin: Math.sin(shark.rotation), cos: Math.cos(shark.rotation) };
+  for (const p of allTargets) {
+    const pOBB = boatOBB(p);
+    const hit = obbOverlap(pOBB, sharkOBB);
+    if (hit && now - p.lastHitTime > INVULN_AFTER_HIT) {
+      p.x += hit.pushX; p.z += hit.pushZ;
+      p.health -= shark.damage;
+      p.lastHitTime = now;
+      spawnSplash(p.x, p.z);
+      spawnFloatingText(p.x, p.z, '-' + shark.damage + ' HP', '#ff4444');
+      if (p.id === 'local') triggerHitEffect();
+    }
+  }
+
+  // Update mesh
+  if (sharkMesh) {
+    const wy = getWaveHeight(shark.x, shark.z, gameTime);
+    sharkMesh.position.set(shark.x, wy - 0.5, shark.z);
+    sharkMesh.rotation.set(0, shark.rotation + Math.sin(gameTime * 3) * 0.1, 0); // wobble
+  }
+  if (sharkRing) {
+    sharkRing.position.set(shark.x, getWaveHeight(shark.x, shark.z, gameTime) - 0.3, shark.z);
   }
 }
 
@@ -1322,6 +1427,42 @@ gltfLoader.load(
   () => { console.warn('Bomb GLTF load failed — using procedural fallback'); modelsReady.bomb = true; }
 );
 
+// -- Shark GLTF --
+gltfLoader.load(
+  './public/assets/shark/shark.gltf',
+  (gltf) => {
+    sharkModelTemplate = gltf.scene;
+    sharkModelTemplate.scale.setScalar(2.0);
+    sharkModelTemplate.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+    modelsReady.shark = true;
+  },
+  undefined,
+  () => { console.warn('Shark GLTF load failed — using procedural fallback'); modelsReady.shark = true; }
+);
+
+// -- Plastic containers FBX --
+const fbxLoader = new FBXLoader();
+fbxLoader.load(
+  './public/assets/plastic_containers/m3d_plasticcontainers_fbx.fbx',
+  (fbxScene) => {
+    fbxScene.traverse(c => {
+      if (c.isMesh) {
+        const size = classifyGarbageSize(c.name);
+        const points = GARBAGE_SIZE_POINTS[size];
+        // Determine scale based on size
+        let scale = 0.02;
+        if (size === 'small') scale = 0.01;
+        else if (size === 'large') scale = 0.05;
+        garbageFBXMeshes.push({ mesh: c, size, points, name: c.name, scale });
+      }
+    });
+    garbageFBXLoaded = true;
+    console.log('Plastic containers FBX loaded, found ' + garbageFBXMeshes.length + ' meshes');
+  },
+  undefined,
+  () => { console.warn('Plastic containers FBX load failed — using procedural fallback'); }
+);
+
 // ============================================================
 // 9. GAME ENTITIES — create players, pirates, garbage instances
 // ============================================================
@@ -1381,7 +1522,7 @@ function makePirateEntity(idx) {
   const angle = Math.random() * Math.PI * 2;
   const pirate = {
     id: 'pirate_' + idx,
-    name: isFlagship ? 'Flagship' : ('Pirate ' + (idx + 1)),
+    name: 'Pirate Ship',
     x: Math.cos(angle) * 60, z: Math.sin(angle) * 60,
     rotation: Math.random() * Math.PI * 2,
     vx: 0, vz: 0,
@@ -1421,7 +1562,15 @@ function makePirateEntity(idx) {
 }
 
 function addGarbageMesh(g) {
-  const mesh = createProceduralGarbage(g.type);
+  let mesh;
+  if (g.fbxIdx >= 0 && garbageFBXLoaded && garbageFBXMeshes[g.fbxIdx]) {
+    const fbxData = garbageFBXMeshes[g.fbxIdx];
+    mesh = fbxData.mesh.clone();
+    mesh.scale.setScalar(fbxData.scale);
+    mesh.castShadow = true;
+  } else {
+    mesh = createProceduralGarbage(g.type);
+  }
   mesh.position.set(g.x, 0.3, g.z);
   scene.add(mesh);
   garbageMeshes.set(g.id, mesh);
@@ -1691,7 +1840,7 @@ function updateLeaderboard() {
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     const cls = 'lb-row' + (e.isLocal ? ' me' : '');
-    const tag = e.isFlagship ? ' [Flagship]' : '';
+    const tag = '';
     html += '<div class="' + cls + '">'
       + '<span class="lb-rank">' + (i + 1) + '</span>'
       + '<span class="lb-dot" style="background:' + e.color + '"></span>'
@@ -1813,6 +1962,34 @@ function initGame() {
   playerMesh = makePlayerMesh();
   for (let i = 0; i < BOT_COUNT; i++) makeBotEntity(i);
   for (let i = 0; i < PIRATE_COUNT; i++) makePirateEntity(i);
+
+  // Shark
+  if (sharkModelTemplate) {
+    sharkMesh = sharkModelTemplate.clone();
+    sharkMesh.scale.setScalar(2.0);
+  } else {
+    // Procedural fallback: grey elongated shape
+    const sg = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.5, 4, 8), new THREE.MeshStandardMaterial({color: 0x666688}));
+    body.rotation.x = Math.PI / 2;
+    sg.add(body);
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.5, 4), new THREE.MeshStandardMaterial({color: 0x555577}));
+    fin.position.y = 0.8;
+    fin.rotation.z = Math.PI;
+    sg.add(fin);
+    sharkMesh = sg;
+  }
+  shark.x = -50; shark.z = -50;
+  sharkMesh.position.set(shark.x, -0.5, shark.z);
+  scene.add(sharkMesh);
+
+  // Shark ring (blue)
+  const srg = new THREE.RingGeometry(2.0, 2.3, 32);
+  const srm = new THREE.MeshBasicMaterial({color: 0x4488ff, side: THREE.DoubleSide, transparent: true, opacity: 0.3});
+  sharkRing = new THREE.Mesh(srg, srm);
+  sharkRing.rotation.x = -Math.PI / 2;
+  scene.add(sharkRing);
+
   for (let i = 0; i < MAX_GARBAGE_COUNT; i++) {
     const g = createGarbageItem();
     garbage.push(g);
@@ -1866,8 +2043,9 @@ function gameLoop(timestamp) {
     for (let i = garbage.length - 1; i >= 0; i--) {
       const g = garbage[i];
       if (pointInOBB(g.x, g.z, bobb, GARBAGE_COLLECT_MARGIN)) {
-        bot.plasticCount  += 1;
-        bot.totalCollected += 1;
+        const bpts = g.points || 1;
+        bot.plasticCount  += bpts;
+        bot.totalCollected += bpts;
         checkLevelUp(bot);
         removeGarbageMesh(g.id);
         garbage.splice(i, 1);
@@ -1885,6 +2063,9 @@ function gameLoop(timestamp) {
     bombs.push(...res.newBombs);
   }
   checkPiratePirateCollisions();
+
+  // ---- SHARK ----
+  updateShark(dt, gameTime);
 
   // ---- BOMBS ----
   const bEvts = updateBombs(dt, gameTime, allPlayers);
@@ -2017,7 +2198,7 @@ function beginGame() {
 
   // Wait for GLTF models (or fallback flags)
   const poll = () => {
-    if (modelsReady.boat && modelsReady.pirate && modelsReady.bomb) {
+    if (modelsReady.boat && modelsReady.pirate && modelsReady.bomb && modelsReady.shark) {
       initGame();
       gameStarted = true;
       requestAnimationFrame(gameLoop);
