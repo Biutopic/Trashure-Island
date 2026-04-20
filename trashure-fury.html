@@ -1343,43 +1343,39 @@
     #combo-display.active { opacity: 1; }
 
     /* ---- BEGINNER TIPS ---- */
-    /* ---- RADAR (bottom-right, opposite the robot) ---- */
+    /* ---- RADAR (bottom-right, marine-radar style) ---- */
     #radar-hud {
       position: fixed; bottom: 18px; right: 18px;
-      width: 168px; height: 168px;
+      width: 184px; height: 184px;
       z-index: 18; pointer-events: none;
       border-radius: 50%;
-      background: radial-gradient(circle at 50% 50%, rgba(0, 40, 50, 0.75) 0%, rgba(0, 20, 30, 0.88) 70%, rgba(0, 10, 20, 0.95) 100%);
-      border: 1px solid rgba(0, 220, 200, 0.35);
+      background:
+        radial-gradient(circle at 50% 50%, rgba(2, 34, 26, 0.92) 0%, rgba(1, 20, 16, 0.96) 75%, rgba(0, 10, 8, 0.98) 100%);
+      border: 2px solid rgba(0, 220, 170, 0.55);
       box-shadow:
-        0 6px 22px rgba(0, 0, 0, 0.55),
-        inset 0 0 30px rgba(0, 220, 200, 0.08),
-        0 0 0 4px rgba(0, 220, 200, 0.06);
+        0 6px 26px rgba(0, 0, 0, 0.6),
+        inset 0 0 40px rgba(0, 220, 170, 0.12),
+        0 0 18px rgba(0, 220, 170, 0.18),
+        0 0 0 4px rgba(0, 0, 0, 0.35);
     }
+    /* The canvas fills the bezel — all rings, ticks, land + echoes are
+       drawn by JS so the sweep can interact with them realistically. */
     #radar-hud canvas {
       position: absolute; inset: 0; width: 100%; height: 100%;
     }
-    #radar-hud .radar-ring {
-      position: absolute; border: 1px solid rgba(0, 220, 200, 0.18);
-      border-radius: 50%; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-    }
-    #radar-hud .radar-ring.r1 { width: 33%;  height: 33%; }
-    #radar-hud .radar-ring.r2 { width: 66%;  height: 66%; }
-    #radar-hud .radar-ring.r3 { width: 100%; height: 100%; border-color: rgba(0, 220, 200, 0.30); }
-    #radar-hud .radar-cross::before,
-    #radar-hud .radar-cross::after {
-      content: ''; position: absolute;
-      background: rgba(0, 220, 200, 0.18);
-    }
-    #radar-hud .radar-cross::before { left: 0; right: 0; top: 50%; height: 1px; }
-    #radar-hud .radar-cross::after  { top: 0; bottom: 0; left: 50%; width: 1px; }
     #radar-hud .radar-label {
       position: absolute; top: 6px; left: 0; right: 0;
       text-align: center;
       font-family: var(--font-heading); font-size: 0.58rem;
-      letter-spacing: 0.28em; color: rgba(0, 220, 200, 0.7);
-      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+      letter-spacing: 0.32em; color: rgba(0, 230, 180, 0.75);
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+    }
+    #radar-hud .radar-range {
+      position: absolute; bottom: 6px; left: 0; right: 0;
+      text-align: center;
+      font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+      font-size: 0.56rem; letter-spacing: 0.12em;
+      color: rgba(0, 230, 180, 0.55);
     }
 
     /* ---- REPO ROBOT GUIDE (flush into the bottom-left corner) ---- */
@@ -1695,12 +1691,9 @@
 
   <!-- Radar HUD: bottom-right, opposite the robot -->
   <div id="radar-hud" aria-hidden="true">
-    <div class="radar-label">RADAR</div>
-    <div class="radar-ring r1"></div>
-    <div class="radar-ring r2"></div>
-    <div class="radar-ring r3"></div>
-    <div class="radar-cross"></div>
     <canvas id="radar-canvas"></canvas>
+    <div class="radar-label">RADAR</div>
+    <div class="radar-range" id="radar-range">90m</div>
   </div>
 
   <!-- Hit vignette -->
@@ -8663,61 +8656,181 @@ function _typewriteTip(html) {
   }, 22);
 }
 
-// ---- RADAR HUD (bottom-right) ----
-// Shows entities around the player: pirates (red), whale (blue),
-// Hydronaute (cyan), bots (yellow), mines (orange). A sweeping line
-// rotates once per 2s. Player is always centered; the world rotates
-// under the sweep relative to the player's heading so "up" on the
-// radar is always where the player is pointing.
+// ---- RADAR HUD (bottom-right, marine-style) ----
+// Full marine-radar vibe: rotating amber sweep arm with trailing cone,
+// range rings, compass ticks, the actual island drawn as a shaded land
+// mass at scale, and echoes with persistence — returns flash bright
+// when the sweep passes over them, then decay back down until the next
+// pass (typical PPI scope behaviour). "Up" is always the player bow.
 (function _initRadar() {
   const canvas = document.getElementById('radar-canvas');
   if (!canvas) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const CSS_SIZE = 168;
+  const CSS_SIZE = 184;
   canvas.width  = CSS_SIZE * dpr;
   canvas.height = CSS_SIZE * dpr;
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const RANGE = 90;        // world units shown from center to edge
-  const R     = CSS_SIZE / 2 - 4;
-  let sweepAngle = 0;
+  const cx = CSS_SIZE / 2, cy = CSS_SIZE / 2;
+  const R = CSS_SIZE / 2 - 6;
+  const RANGE = 90;        // world units from center to outer ring
+  const SWEEP_PERIOD = 2.4;
   const FPS = 30;
+  let sweepAngle = 0;      // 0 = north (up), rotates CW
   let lastT = 0;
-
-  function drawBlip(cx, cy, ex, ez, r, color, glow, ping) {
-    // Transform world delta into radar-space (rotated so player heading = up)
+  // Map an entity's world position to (sx, sy) on the radar canvas,
+  // taking player heading into account so the bow always points up.
+  // Returns null if the entity is outside the display range + margin.
+  function project(ex, ez, overshoot) {
     const dx = ex - localPlayer.x;
     const dz = ez - localPlayer.z;
     const dist = Math.hypot(dx, dz);
-    if (dist < 0.1) return;
-    // Rotate by -rotation so forward aligns with up (negative Y in screen).
-    // localPlayer.rotation: 0 = +Z (forward), increases counter-clockwise.
+    if (dist > RANGE + (overshoot || 0)) return null;
     const rot = localPlayer.rotation || 0;
     const rx =  dx * Math.cos(rot) - dz * Math.sin(rot);
     const rz =  dx * Math.sin(rot) + dz * Math.cos(rot);
-    // Scale, clamping to the outer ring so far entities still appear on edge
-    const scale = Math.min(dist, RANGE) / RANGE;
-    const px = cx + rx / Math.max(dist, 0.01) * scale * R;
-    const py = cy - rz / Math.max(dist, 0.01) * scale * R; // screen Y flipped
-    if (glow) {
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-    } else {
-      ctx.shadowBlur = 0;
+    const scale = R / RANGE;
+    return { sx: cx + rx * scale, sy: cy - rz * scale, worldAngle: Math.atan2(rx, rz), dist };
+  }
+  // Sweep persistence: how bright this return is right now. brightness
+  // ~ 1 immediately after the sweep passes; decays exponentially.
+  function echoStrength(worldAngleRel) {
+    // sweepAngle grows clockwise from up; map to a [0, 2PI) phase.
+    let lag = sweepAngle - worldAngleRel;
+    while (lag < 0) lag += Math.PI * 2;
+    while (lag > Math.PI * 2) lag -= Math.PI * 2;
+    // lag in radians -> seconds since sweep passed
+    const secs = lag / (Math.PI * 2) * SWEEP_PERIOD;
+    return Math.exp(-secs * 1.3);  // decay
+  }
+
+  function drawGrid() {
+    // Scope tint (subtle green-amber phosphor background)
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+    // Range rings at 25 / 50 / 75 / 100% range
+    ctx.strokeStyle = 'rgba(0, 230, 170, 0.18)';
+    ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) {
+      ctx.beginPath(); ctx.arc(cx, cy, R * k / 4, 0, Math.PI * 2); ctx.stroke();
     }
-    ctx.fillStyle = color;
+    // Crosshair
+    ctx.strokeStyle = 'rgba(0, 230, 170, 0.14)';
     ctx.beginPath();
-    ctx.arc(px, py, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    // "Just pinged" accent for close/active threats
-    if (ping) {
-      ctx.strokeStyle = color;
-      ctx.globalAlpha = 0.5;
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(px, py, r + 4, 0, Math.PI * 2); ctx.stroke();
-      ctx.globalAlpha = 1;
+    ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy);
+    ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R);
+    ctx.stroke();
+    // Compass ticks every 30°, bigger every 90°
+    for (let a = 0; a < 360; a += 10) {
+      const rad = a * Math.PI / 180;
+      const outer = R;
+      const inner = (a % 30 === 0) ? R - 8 : R - 4;
+      const strong = (a % 90 === 0);
+      ctx.strokeStyle = strong ? 'rgba(0, 230, 170, 0.55)' : 'rgba(0, 230, 170, 0.22)';
+      ctx.lineWidth = strong ? 1.4 : 1;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.sin(rad) * outer, cy - Math.cos(rad) * outer);
+      ctx.lineTo(cx + Math.sin(rad) * inner, cy - Math.cos(rad) * inner);
+      ctx.stroke();
     }
+    // Cardinal letter "N" on the bow
+    ctx.fillStyle = 'rgba(0, 230, 170, 0.7)';
+    ctx.font = '700 9px ui-monospace, "SFMono-Regular", Menlo, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('N', cx, cy - R + 10);
+    ctx.restore();
+  }
+
+  function drawLand() {
+    // The game's island is a disc at world origin. Project its perimeter
+    // + a bit of margin so it reads as a real land mass rather than a dot.
+    if (typeof ISLAND_RADIUS === 'undefined') return;
+    const landRadius = (typeof ISLAND_RADIUS !== 'undefined') ? ISLAND_RADIUS : 12;
+    const center = project(0, 0, landRadius);
+    if (!center) return;
+    const scale = R / RANGE;
+    const rPx = landRadius * scale;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+    // Fill — yellow-green land colour, softly glowing edge
+    ctx.fillStyle = 'rgba(180, 200, 60, 0.30)';
+    ctx.beginPath(); ctx.arc(center.sx, center.sy, rPx, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(210, 230, 90, 0.55)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(center.sx, center.sy, rPx, 0, Math.PI * 2); ctx.stroke();
+    // Texture flecks (a few randomised specks, seeded by position so they
+    // don't flicker between frames)
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const a = (i * 2.399) % (Math.PI * 2);
+      const r = rPx * (0.25 + ((i * 37) % 55) / 100);
+      ctx.fillStyle = 'rgba(230, 245, 130, 0.55)';
+      ctx.beginPath(); ctx.arc(center.sx + Math.cos(a) * r, center.sy + Math.sin(a) * r, 0.9, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawEcho(ex, ez, r, color, glow) {
+    const p = project(ex, ez, r);
+    if (!p) return;
+    const s = echoStrength(p.worldAngle);
+    const alpha = Math.max(0.15, s);
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+    if (glow && s > 0.4) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10 * s;
+    }
+    // Build color with alpha baked in: color string should be "r,g,b"
+    ctx.fillStyle = 'rgba(' + color + ',' + alpha.toFixed(3) + ')';
+    ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawSweep() {
+    ctx.save();
+    ctx.translate(cx, cy);
+    // Sweep cone behind the arm
+    const CONE = Math.PI * 0.9;
+    const arm = sweepAngle - Math.PI / 2; // radar north = up
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+    grad.addColorStop(0, 'rgba(40, 255, 170, 0.00)');
+    grad.addColorStop(1, 'rgba(40, 255, 170, 0.22)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, R, arm - CONE, arm);
+    ctx.closePath();
+    ctx.fill();
+    // Sweep arm itself
+    const ag = ctx.createLinearGradient(0, 0, Math.cos(arm) * R, Math.sin(arm) * R);
+    ag.addColorStop(0, 'rgba(120, 255, 200, 0.9)');
+    ag.addColorStop(1, 'rgba(0, 255, 170, 0.0)');
+    ctx.strokeStyle = ag;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(arm) * R, Math.sin(arm) * R);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPlayer() {
+    // Player icon (triangle pointing up) at center
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.beginPath();
+    ctx.moveTo(0, -6);
+    ctx.lineTo(4, 4);
+    ctx.lineTo(-4, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 230, 170, 0.9)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
   }
 
   function draw(now) {
@@ -8726,76 +8839,47 @@ function _typewriteTip(html) {
     if (now - lastT < 1000 / FPS) return;
     const dt = lastT === 0 ? 1 / FPS : (now - lastT) / 1000;
     lastT = now;
-    const cx = CSS_SIZE / 2, cy = CSS_SIZE / 2;
-    ctx.clearRect(0, 0, CSS_SIZE, CSS_SIZE);
 
-    // Sweeping wedge — faint cone trailing behind the radar arm
-    sweepAngle += dt * (Math.PI * 2 / 2.0); // full revolution every 2s
+    sweepAngle += dt * (Math.PI * 2 / SWEEP_PERIOD);
     if (sweepAngle > Math.PI * 2) sweepAngle -= Math.PI * 2;
-    const sweepLen = Math.PI * 0.6;
-    ctx.save();
-    ctx.translate(cx, cy);
-    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
-    grad.addColorStop(0, 'rgba(0, 230, 200, 0.00)');
-    grad.addColorStop(1, 'rgba(0, 230, 200, 0.22)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.arc(0, 0, R, -sweepAngle - Math.PI / 2 - sweepLen, -sweepAngle - Math.PI / 2);
-    ctx.closePath();
-    ctx.fill();
-    // Sweep arm
-    ctx.strokeStyle = 'rgba(0, 255, 220, 0.65)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(Math.cos(-sweepAngle - Math.PI / 2) * R, Math.sin(-sweepAngle - Math.PI / 2) * R);
-    ctx.stroke();
-    ctx.restore();
 
-    // Player dot at center with forward indicator
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 3.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx, cy - 10); // forward = up
-    ctx.stroke();
+    ctx.clearRect(0, 0, CSS_SIZE, CSS_SIZE);
+    drawGrid();
+    drawLand();
 
-    // Island — centered at world origin, small gray disc on the radar
-    drawBlip(cx, cy, 0, 0, 4, 'rgba(180, 170, 140, 0.55)', false, false);
-
-    // Bots, Hydronaute, Whale
+    // Echoes — drawn with sweep-persistence. Order: faint stuff first so
+    // threats paint over debris when they coincide.
+    // 1) Plastic debris (lots of tiny yellow returns)
+    if (typeof garbage !== 'undefined' && garbage) {
+      for (let i = 0; i < garbage.length; i++) {
+        const g = garbage[i]; if (!g) continue;
+        const color = g.isHeal ? '255, 130, 200' : '200, 220, 120';
+        drawEcho(g.x, g.z, g.isHeal ? 1.5 : 1.2, color, false);
+      }
+    }
+    // 2) Sea mines — orange
+    if (typeof seaMines !== 'undefined' && seaMines) {
+      for (const m of seaMines) { if (m) drawEcho(m.x, m.z, 2, '255, 150, 60', false); }
+    }
+    // 3) Bots, whale, hydronaute
     if (typeof bots !== 'undefined' && bots) {
       for (const b of bots) {
         if (!b || b.health <= 0) continue;
-        let color = 'rgba(255, 210, 80, 0.95)'; // rival bot
-        let r = 2.6;
-        if (b.isWhale) { color = 'rgba(120, 180, 255, 0.95)'; r = 4; }
-        else if (b.isHydro) { color = 'rgba(0, 255, 210, 0.95)'; r = 3.2; }
-        drawBlip(cx, cy, b.x, b.z, r, color, false, false);
+        if (b.isWhale)      drawEcho(b.x, b.z, 4.5, '120, 180, 255', true);
+        else if (b.isHydro) drawEcho(b.x, b.z, 3.2, '0, 255, 210', false);
+        else                drawEcho(b.x, b.z, 2.6, '255, 210, 80', false);
       }
     }
-    // Pirates — emerged only — pulse flag when close
+    // 4) Pirates — bright red, glow, brightest echo
     if (typeof pirates !== 'undefined' && pirates) {
-      const pulse = Math.floor(now / 300) % 2 === 0;
       for (const p of pirates) {
         if (!p || !p.emerged || p.diving) continue;
-        const dx = p.x - localPlayer.x, dz = p.z - localPlayer.z;
-        const close = (dx * dx + dz * dz) < 50 * 50;
-        drawBlip(cx, cy, p.x, p.z, close ? 3.5 : 3, 'rgba(255, 80, 70, 0.95)', true, close && pulse);
+        drawEcho(p.x, p.z, 3.2, '255, 80, 70', true);
       }
     }
-    // Mines
-    if (typeof seaMines !== 'undefined' && seaMines) {
-      for (const m of seaMines) {
-        if (!m) continue;
-        drawBlip(cx, cy, m.x, m.z, 2, 'rgba(255, 150, 60, 0.85)', false, false);
-      }
-    }
+
+    drawSweep();
+    drawPlayer();
   }
   requestAnimationFrame(draw);
 })();
