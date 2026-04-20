@@ -6,7 +6,7 @@
   <title>TRASHURE ISLAND</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;700&family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --background: hsl(210, 50%, 6%);
@@ -554,94 +554,196 @@
     }
     .tuto-close:hover { background: rgba(220,80,80,0.7); color: #fff; }
 
-    /* ---- HUD ---- */
+    /* ---- HUD (steampunk / brass gauges) ---- */
     #hud {
       position: fixed; top: 16px; left: 16px; z-index: 20;
-      width: 240px; padding: 18px;
+      width: 256px; padding: 16px 18px 18px;
+      /* Aged-leather + brass plate backdrop */
+      background:
+        linear-gradient(180deg, rgba(58, 34, 12, 0.92), rgba(34, 20, 8, 0.95)),
+        repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0 2px, transparent 2px 6px);
+      border: 2px solid #7a5020;
+      border-radius: 6px;
       box-shadow:
-        0 4px 24px rgba(0,0,0,0.5),
-        inset 0 1px 0 rgba(100,200,220,0.15),
-        0 0 40px rgba(0,200,200,0.04);
+        0 6px 24px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(212, 161, 86, 0.25),
+        inset 0 0 28px rgba(0, 0, 0, 0.55),
+        0 0 0 4px rgba(0, 0, 0, 0.35);
+      color: #e8c78a;
+      font-family: var(--font-heading);
     }
+    /* Rivets at the corners of the HUD plate. */
+    #hud::before, #hud::after,
+    #hud > .hud-rivet-tl, #hud > .hud-rivet-br {
+      content: '';
+      position: absolute;
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 30% 30%, #f2cc87 0%, #b88a44 40%, #5a3a1a 100%);
+      box-shadow:
+        inset 0 1px 1px rgba(255, 220, 150, 0.6),
+        0 1px 2px rgba(0, 0, 0, 0.7);
+    }
+    #hud::before { top: 6px;    left: 6px; }
+    #hud::after  { top: 6px;    right: 6px; }
+    #hud > .hud-rivet-tl { bottom: 6px; left: 6px; }
+    #hud > .hud-rivet-br { bottom: 6px; right: 6px; }
+
     .hud-name {
-      font-family: var(--font-heading); font-size: 0.9rem;
-      color: var(--primary); margin-bottom: 12px;
-      letter-spacing: 1px;
-      text-shadow: 0 0 12px rgba(0,220,200,0.3);
+      font-family: 'Cinzel', 'Playfair Display', Georgia, serif;
+      font-size: 0.98rem; font-weight: 700;
+      color: #f3d9a0;
+      margin: 2px 0 14px 0;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-shadow:
+        0 1px 0 #5a3a1a,
+        0 2px 0 rgba(0, 0, 0, 0.5),
+        0 0 8px rgba(255, 180, 80, 0.25);
       display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(184, 138, 68, 0.35);
     }
     .hud-name .hud-cap-name { white-space: nowrap; }
     .hud-name .hud-mod-icons {
       display: inline-flex; align-items: center; gap: 5px;
-      opacity: 0.85;
+      opacity: 0.9;
     }
     .hud-name .hud-mod-ico {
       width: 14px; height: 14px;
-      color: rgba(220, 245, 250, 0.9);     /* monochrome, no color */
-      filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.45));
+      color: #f3d9a0;
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7));
     }
+
     .hud-bar-label {
-      font-size: 0.62rem; color: var(--muted-fg); text-transform: uppercase;
-      letter-spacing: 1.5px; margin-bottom: 4px; margin-top: 10px;
+      font-family: var(--font-heading); font-size: 0.66rem;
+      color: #d4a156;
+      text-transform: uppercase;
+      letter-spacing: 2.5px; margin-bottom: 5px; margin-top: 12px;
       display: flex; justify-content: space-between; align-items: center;
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
     }
     .hud-bar-label::before {
       content: ''; display: inline-block;
-      width: 10px; height: 10px; margin-right: 6px;
+      width: 11px; height: 11px; margin-right: 6px;
       background-size: contain; background-repeat: no-repeat;
       vertical-align: middle;
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6));
     }
+    /* Heart — brass-tinted */
     .hud-bar-label.hp::before {
-      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2322c55e"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>');
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23d4a156"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>');
     }
+    /* Cog — steampunk energy symbol */
     .hud-bar-label.boost::before {
-      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2322d3ee"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>');
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23d4a156"><path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7zm8.94-3.5a8.9 8.9 0 0 0-.15-1.64l2.02-1.58-2-3.46-2.38.96a8.97 8.97 0 0 0-2.83-1.64L15.25 2h-6.5l-.35 2.64a8.97 8.97 0 0 0-2.83 1.64l-2.38-.96-2 3.46 2.02 1.58a8.9 8.9 0 0 0 0 3.28l-2.02 1.58 2 3.46 2.38-.96c.84.69 1.8 1.25 2.83 1.64L8.75 22h6.5l.35-2.64a8.97 8.97 0 0 0 2.83-1.64l2.38.96 2-3.46-2.02-1.58c.1-.54.15-1.09.15-1.64z"/></svg>');
     }
+
+    /* Brass gauge tube — the bar housing */
     .hud-bar-wrap {
-      width: 100%; height: 11px;
-      background: rgba(0,0,0,0.55); border-radius: 6px;
-      overflow: hidden; border: 1px solid rgba(100,200,220,0.15);
+      width: 100%; height: 14px;
+      background:
+        linear-gradient(180deg, #1a0d03 0%, #0c0602 45%, #1a0d03 100%);
+      border-radius: 7px;
+      overflow: hidden;
+      border: 1.5px solid #8a5a2b;
       position: relative;
-      box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+      box-shadow:
+        inset 0 2px 3px rgba(0, 0, 0, 0.85),
+        inset 0 -1px 1px rgba(184, 138, 68, 0.18),
+        0 1px 0 rgba(212, 161, 86, 0.3);
+    }
+    /* Brass end caps + center rivet, giving the tube a pressure-gauge feel */
+    .hud-bar-wrap::before {
+      content: '';
+      position: absolute; left: -1px; top: -1px; bottom: -1px; width: 6px;
+      background: linear-gradient(180deg, #f2cc87, #8a5a2b 50%, #4a2e0e);
+      border-radius: 7px 0 0 7px;
+      border-right: 1px solid #5a3a1a;
+      z-index: 3;
     }
     .hud-bar-wrap::after {
-      content: ''; position: absolute; inset: 0;
-      background: linear-gradient(to bottom, rgba(255,255,255,0.15), transparent 50%);
-      pointer-events: none; border-radius: 6px;
+      content: '';
+      position: absolute; right: -1px; top: -1px; bottom: -1px; width: 6px;
+      background: linear-gradient(180deg, #f2cc87, #8a5a2b 50%, #4a2e0e);
+      border-radius: 0 7px 7px 0;
+      border-left: 1px solid #5a3a1a;
+      z-index: 3;
+    }
+    /* Tick marks etched in the glass */
+    .hud-bar-wrap .hud-bar-ticks {
+      position: absolute; inset: 0;
+      pointer-events: none; z-index: 2;
+      background-image: repeating-linear-gradient(
+        to right,
+        rgba(212, 161, 86, 0.18) 0 1px,
+        transparent 1px 25%
+      );
+      margin: 0 6px;
     }
     .hud-bar-fill {
-      height: 100%; border-radius: 6px;
-      transition: width 0.2s ease-out;
-      position: relative; overflow: hidden;
-      box-shadow: 0 0 12px currentColor;
+      position: relative;
+      height: 100%;
+      transition: width 0.25s ease-out;
+      overflow: hidden;
+      box-shadow: 0 0 10px currentColor;
     }
+    /* Subtle shimmer / reflection on the fluid */
     .hud-bar-fill::after {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 40%;
-      background: linear-gradient(to bottom, rgba(255,255,255,0.35), transparent);
-      border-radius: 6px 6px 0 0;
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(255,230,180,0.35), transparent 60%);
+      pointer-events: none;
     }
-    .bar-health { background: linear-gradient(90deg, #16a34a, #4ade80); color: #4ade80; }
+    /* HP = warm copper / patinated red */
+    .bar-health {
+      background: linear-gradient(90deg, #7a2614 0%, #c55a2b 55%, #f08a3c 100%);
+      color: #f08a3c;
+    }
     .bar-health.critical {
-      background: linear-gradient(90deg, #dc2626, #f87171);
-      color: #f87171;
+      background: linear-gradient(90deg, #6a1a0b 0%, #d13e1c 60%, #f04e1c 100%);
+      color: #ff5a1c;
       animation: pulse-bar 0.45s infinite alternate;
     }
-    .bar-boost { background: linear-gradient(90deg, #0891b2, #22d3ee); color: #22d3ee; }
-    .bar-boost.mid { background: linear-gradient(90deg, #d97706, #fbbf24); color: #fbbf24; }
-    .bar-boost.low { background: linear-gradient(90deg, #dc2626, #f87171); color: #f87171; }
-    @keyframes pulse-bar {
-      from { opacity: 1; box-shadow: 0 0 16px currentColor; }
-      to   { opacity: 0.55; box-shadow: 0 0 6px currentColor; }
+    /* Energy = amber steam-pressure glow */
+    .bar-boost {
+      background: linear-gradient(90deg, #5a3a0b 0%, #b97b1f 50%, #ffcf66 100%);
+      color: #ffb347;
     }
+    .bar-boost.mid {
+      background: linear-gradient(90deg, #6a2e0b 0%, #c7651f 55%, #ff9d3b 100%);
+      color: #ff9d3b;
+    }
+    .bar-boost.low {
+      background: linear-gradient(90deg, #5a1a0b 0%, #a8361a 55%, #dc5238 100%);
+      color: #dc5238;
+      animation: pulse-bar 0.5s infinite alternate;
+    }
+    @keyframes pulse-bar {
+      from { opacity: 1; box-shadow: 0 0 14px currentColor; }
+      to   { opacity: 0.55; box-shadow: 0 0 4px currentColor; }
+    }
+
+    /* Plastic counter — engraved brass plate */
     .hud-stat {
-      font-size: 0.75rem; color: var(--muted-fg); margin-top: 10px;
-      padding-top: 10px; border-top: 1px solid rgba(100,200,220,0.1);
+      font-family: 'Cinzel', 'Playfair Display', Georgia, serif;
+      font-size: 0.72rem;
+      color: #d4a156;
+      margin-top: 14px;
+      padding: 8px 10px;
+      border: 1px solid rgba(138, 90, 43, 0.6);
+      border-radius: 4px;
+      background: linear-gradient(180deg, rgba(58, 34, 12, 0.5), rgba(28, 16, 6, 0.7));
+      box-shadow: inset 0 1px 0 rgba(212, 161, 86, 0.25), inset 0 -1px 2px rgba(0, 0, 0, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 2px;
       display: flex; justify-content: space-between; align-items: center;
     }
     .hud-stat span {
-      color: #00ffdd; font-weight: 800; font-size: 0.95rem;
-      font-family: var(--font-heading);
-      text-shadow: 0 0 10px rgba(0,255,200,0.5);
+      color: #f3d9a0; font-weight: 700; font-size: 1.05rem;
+      font-family: 'Cinzel', 'Playfair Display', Georgia, serif;
+      text-shadow: 0 1px 0 #5a3a1a, 0 2px 2px rgba(0, 0, 0, 0.7);
+      letter-spacing: 1px;
     }
 
     #upgrade-progress {
@@ -1604,12 +1706,14 @@
 
 
   <!-- HUD -->
-  <div id="hud" class="glass-panel">
-    <div class="hud-name" id="hud-name">Joueur Nv 1</div>
-    <div class="hud-bar-label hp">Vie</div>
-    <div class="hud-bar-wrap"><div class="hud-bar-fill bar-health" id="hud-hp" style="width:100%"></div></div>
-    <div class="hud-bar-label boost">&Eacute;nergie</div>
-    <div class="hud-bar-wrap"><div class="hud-bar-fill bar-boost" id="hud-boost" style="width:100%"></div></div>
+  <div id="hud">
+    <span class="hud-rivet-tl" aria-hidden="true"></span>
+    <span class="hud-rivet-br" aria-hidden="true"></span>
+    <div class="hud-name" id="hud-name">Joueur</div>
+    <div class="hud-bar-label hp"><span>Vitalit&eacute;</span></div>
+    <div class="hud-bar-wrap"><div class="hud-bar-ticks"></div><div class="hud-bar-fill bar-health" id="hud-hp" style="width:100%"></div></div>
+    <div class="hud-bar-label boost"><span>Pression Vapeur</span></div>
+    <div class="hud-bar-wrap"><div class="hud-bar-ticks"></div><div class="hud-bar-fill bar-boost" id="hud-boost" style="width:100%"></div></div>
     <div class="hud-stat">Plastique <span id="hud-total">0</span></div>
   </div>
 
