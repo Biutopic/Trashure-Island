@@ -8254,14 +8254,25 @@ let _lbLastHash = '';
 function updateLeaderboard() {
   _lbEntries.length = 0;
   _lbEntries.push({ name: localPlayer.name, score: localPlayer.totalCollected, color: localPlayer.color, isLocal: true });
-  // In online mode, hide rival-bot slots that aren't currently driven
-  // by a remote human (health is zeroed for those in the game loop).
   const _mpActive = !!(_mp && _mp.ws && _mp.ws.readyState === WebSocket.OPEN && _mp.roundLaunched);
-  for (const b of bots) {
-    if (b.isWhale) continue;
-    if (b.isHydro) continue;
-    if (_mpActive && b.health <= 0) continue;
-    _lbEntries.push({ name: b.name, score: b.totalCollected, color: b.color, isLocal: false });
+  if (_mpActive) {
+    // Online: only the first N rival-bot slots count, where N is the
+    // number of non-self humans currently seated. Those slots are the
+    // ones driven by remote humans; the rest are hidden and shouldn't
+    // appear anywhere in the UI.
+    const rivals = [];
+    for (const b of bots) { if (!b.isWhale && !b.isHydro) rivals.push(b); }
+    const remoteCount = (_mp.remoteBoats || []).length;
+    for (let i = 0; i < remoteCount && i < rivals.length; i++) {
+      const b = rivals[i];
+      _lbEntries.push({ name: b.name, score: b.totalCollected, color: b.color, isLocal: false });
+    }
+  } else {
+    for (const b of bots) {
+      if (b.isWhale) continue;
+      if (b.isHydro) continue;
+      _lbEntries.push({ name: b.name, score: b.totalCollected, color: b.color, isLocal: false });
+    }
   }
   _lbEntries.sort((a, b) => b.score - a.score);
 
