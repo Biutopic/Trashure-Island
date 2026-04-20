@@ -8017,11 +8017,10 @@ const _MODULE_ICON_SVG = {
     '</svg>',
 };
 function _buildHudNameHTML() {
-  const seen = new Set();
+  // One icon per upgrade PICK, in the order they were chosen. Repeated
+  // upgrades of the same module therefore stack visually.
   let icons = '';
   for (const t of playerUpgradeOrder) {
-    if (seen.has(t)) continue;          // one icon per module, no repeats
-    seen.add(t);
     if (_MODULE_ICON_SVG[t]) icons += _MODULE_ICON_SVG[t];
   }
   const safeName = localPlayer.name.replace(/[<>&]/g, (c) => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
