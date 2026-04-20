@@ -1602,14 +1602,14 @@
 <!-- ======== BIUTOPIC INTRO SPLASH ======== -->
 <div id="intro-splash">
   <img class="intro-logo" src="./public/assets/biutopic-white.svg" alt="Biutopic">
-  <div class="intro-presents">pr&eacute;sente</div>
+  <div class="intro-presents" data-i18n="intro_presents">pr&eacute;sente</div>
 </div>
 
 <!-- ======== LOADING SCREEN ======== -->
 <div id="loading-screen">
   <div class="title">TRASHURE ISLAND</div>
   <div class="bar-outer"><div class="bar-inner" id="loading-bar"></div></div>
-  <div class="status" id="loading-status">Chargement des mod&egrave;les...</div>
+  <div class="status" id="loading-status" data-i18n="loading_status">Chargement des mod&egrave;les...</div>
 </div>
 
 <!-- ======== START SCREEN ======== -->
@@ -1687,11 +1687,11 @@
   <!-- HUD -->
   <div id="hud" class="glass-panel">
     <div class="hud-name" id="hud-name">Joueur</div>
-    <div class="hud-bar-label hp"><span>Vie</span></div>
+    <div class="hud-bar-label hp"><span data-i18n="hud_hp">Vie</span></div>
     <div class="hud-bar-wrap"><div class="hud-bar-ticks"></div><div class="hud-bar-fill bar-health" id="hud-hp" style="width:100%"></div></div>
-    <div class="hud-bar-label boost"><span>&Eacute;nergie</span></div>
+    <div class="hud-bar-label boost"><span data-i18n="hud_energy">&Eacute;nergie</span></div>
     <div class="hud-bar-wrap"><div class="hud-bar-ticks"></div><div class="hud-bar-fill bar-boost" id="hud-boost" style="width:100%"></div></div>
-    <div class="hud-stat">Plastique <span id="hud-total">0</span></div>
+    <div class="hud-stat"><span data-i18n="hud_plastic">Plastique</span> <span id="hud-total">0</span></div>
   </div>
 
   <!-- Fire charge crosshair — static outer aim ring + animated progress arc
@@ -1723,7 +1723,7 @@
   </div>
 
   <div id="upgrade-progress" class="glass-panel">
-    <div class="upgrade-progress-label">AM&Eacute;LIORATION</div>
+    <div class="upgrade-progress-label" data-i18n="hud_upgrade_label">AM&Eacute;LIORATION</div>
     <div class="upgrade-progress-track"><div class="upgrade-progress-fill" id="upgrade-progress-fill"></div></div>
     <div class="upgrade-progress-count" id="upgrade-progress-count">0/20</div>
   </div>
@@ -1731,15 +1731,15 @@
   <!-- Fireball unlock gauge — mirrors the amélioration bar so players
        see progress toward 50-plastic threshold. Hides once unlocked. -->
   <div id="fireball-progress" class="glass-panel">
-    <div class="upgrade-progress-label">BOULE DE FEU</div>
+    <div class="upgrade-progress-label" data-i18n="hud_fireball_label">BOULE DE FEU</div>
     <div class="upgrade-progress-track"><div class="fireball-progress-fill" id="fireball-progress-fill"></div></div>
     <div class="upgrade-progress-count" id="fireball-progress-count">0/50</div>
   </div>
 
   <!-- Fireball unlock full-screen flash + banner (fires once). -->
   <div id="fireball-unlock-banner" hidden>
-    <div class="fb-unlock-title">&#128293; BOULE DE FEU D&Eacute;BLOQU&Eacute;E !</div>
-    <div class="fb-unlock-sub">Appuie sur <b>SHIFT</b> pour tirer sur les pirates</div>
+    <div class="fb-unlock-title" data-i18n="fb_unlock_title">&#128293; BOULE DE FEU D&Eacute;BLOQU&Eacute;E !</div>
+    <div class="fb-unlock-sub" data-i18n="fb_unlock_sub">Appuie sur <b>SHIFT</b> pour tirer sur les pirates</div>
   </div>
   <div id="fireball-unlock-flash" hidden></div>
 
@@ -1748,19 +1748,19 @@
 
   <!-- Leaderboard -->
   <div id="leaderboard" class="glass-panel">
-    <div class="lb-header">CLASSEMENT</div>
+    <div class="lb-header" data-i18n="hud_leaderboard">CLASSEMENT</div>
     <div id="lb-rows"></div>
   </div>
 
   <!-- Hydronaute AI HUD -->
   <div id="hydro-hud" class="glass-panel">
-    <div class="hydro-title">🤖 HYDRONAUTE IA</div>
+    <div class="hydro-title" data-i18n="hud_hydro_title">🤖 HYDRONAUTE IA</div>
     <div class="hydro-status" id="hydro-status">Mode : collecte</div>
     <div class="hydro-bar-wrap"><div class="hydro-bar-fill" id="hydro-bar-fill" style="width:0%"></div></div>
   </div>
 
   <!-- Controls hint -->
-  <div id="controls-hint" class="glass-panel">ZQSD Naviguer &middot; Espace Boost &middot; Shift Boule de feu &middot; &Eacute;vitez Baleine &amp; Hydronaute !</div>
+  <div id="controls-hint" class="glass-panel" data-i18n="controls_hint">ZQSD Naviguer &middot; Espace Boost &middot; Shift Boule de feu &middot; &Eacute;vitez Baleine &amp; Hydronaute !</div>
 
   <!-- Combo display -->
   <div id="combo-display" class="glass-panel"></div>
@@ -1778,39 +1778,39 @@
 
   <!-- Hit vignette -->
   <div id="hit-vignette"></div>
-  <div id="hydro-warning">⚠ L'HYDRONAUTE EST PROTÉGÉE !<br><span style="font-size:0.7rem;opacity:0.7">Ne l'attaquez pas — vous subissez les dégâts</span></div>
+  <div id="hydro-warning" data-i18n="hydro_warn">⚠ L'HYDRONAUTE EST PROTÉGÉE !<br><span style="font-size:0.7rem;opacity:0.7">Ne l'attaquez pas — vous subissez les dégâts</span></div>
   <div id="heal-vignette"></div>
-  <div id="low-hp-warning">Ramasse les d&eacute;chets ROSES pour r&eacute;cup&eacute;rer de la vie !</div>
+  <div id="low-hp-warning" data-i18n="hud_low_hp_warn">Ramasse les d&eacute;chets ROSES pour r&eacute;cup&eacute;rer de la vie !</div>
 
   <!-- Respawn overlay -->
   <div id="respawn-overlay" hidden>
-    <div class="respawn-title">NAUFRAGE</div>
+    <div class="respawn-title" data-i18n="respawn_title">NAUFRAGE</div>
     <div class="respawn-count" id="respawn-count">3</div>
   </div>
 
   <!-- Upgrade overlay -->
   <div id="upgrade-overlay" hidden>
-    <div class="upgrade-title">NIVEAU SUP&Eacute;RIEUR !</div>
-    <div class="upgrade-subtitle">Choisis une am&eacute;lioration</div>
+    <div class="upgrade-title" data-i18n="upg_title">NIVEAU SUP&Eacute;RIEUR !</div>
+    <div class="upgrade-subtitle" data-i18n="upg_subtitle">Choisis une am&eacute;lioration</div>
     <div class="upgrade-cards" id="upgrade-cards">
       <div class="upgrade-card" data-upgrade="solar_panel">
         <div class="upgrade-emoji">&#9728;&#65039;</div>
-        <div class="upgrade-name">Panneau Solaire</div>
-        <div class="upgrade-desc">Le turbo dure plus longtemps</div>
+        <div class="upgrade-name" data-i18n="upg_solar_name">Panneau Solaire</div>
+        <div class="upgrade-desc" data-i18n="upg_solar_desc">Le turbo dure plus longtemps</div>
       </div>
       <div class="upgrade-card" data-upgrade="speed">
         <div class="upgrade-emoji">&#9889;</div>
-        <div class="upgrade-name">Vitesse</div>
-        <div class="upgrade-desc">+10 vitesse</div>
+        <div class="upgrade-name" data-i18n="upg_speed_name">Vitesse</div>
+        <div class="upgrade-desc" data-i18n="upg_speed_desc">+10 vitesse</div>
       </div>
       <div class="upgrade-card" data-upgrade="magnet">
         <div class="upgrade-emoji">&#129522;</div>
-        <div class="upgrade-name">Aimant</div>
-        <div class="upgrade-desc">Attire le plastique vers toi</div>
+        <div class="upgrade-name" data-i18n="upg_magnet_name">Aimant</div>
+        <div class="upgrade-desc" data-i18n="upg_magnet_desc">Attire le plastique vers toi</div>
       </div>
     </div>
     <div class="upgrade-timer-wrap"><div class="upgrade-timer-fill" id="upgrade-timer-fill" style="width:100%"></div></div>
-    <div class="upgrade-keys">Appuie 1/2/3 ou A/D + Entr&eacute;e pour choisir</div>
+    <div class="upgrade-keys" data-i18n="upg_keys">Appuie 1/2/3 ou A/D + Entr&eacute;e pour choisir</div>
   </div>
 
   <div id="countdown-overlay" class="hidden"></div>
@@ -1830,22 +1830,22 @@
 
   <!-- Science recap -->
   <div class="science-recap glass-panel" id="science-recap">
-    <div class="science-header">RAPPORT D'ENTRA&Icirc;NEMENT IA</div>
-    <div class="science-subtitle">Donn&eacute;es g&eacute;n&eacute;r&eacute;es pour l'apprentissage de l'Hydronaute</div>
+    <div class="science-header" data-i18n="science_header">RAPPORT D'ENTRA&Icirc;NEMENT IA</div>
+    <div class="science-subtitle" data-i18n="science_subtitle">Donn&eacute;es g&eacute;n&eacute;r&eacute;es pour l'apprentissage de l'Hydronaute</div>
     <!-- Data-scan visualization: pulsing progress bar + scan-line loop,
          replaces the 3D boat for a lighter recap. -->
     <div class="hydronaute-scan" id="hydronaute-scan">
-      <div class="hydronaute-scan-label">HYDRONAUTE // ANALYSE</div>
+      <div class="hydronaute-scan-label" data-i18n="science_scan_label">HYDRONAUTE // ANALYSE</div>
       <div class="hydronaute-scan-id">ID&#x00A0;#R8000</div>
       <div class="hydronaute-scan-bar"><div class="hydronaute-scan-fill"></div></div>
-      <div class="hydronaute-scan-readout" id="hydronaute-scan-readout">// Corr&eacute;lation des donn&eacute;es de mission...</div>
+      <div class="hydronaute-scan-readout" id="hydronaute-scan-readout" data-i18n="science_scan_readout">// Corr&eacute;lation des donn&eacute;es de mission...</div>
     </div>
     <div class="science-stats" id="science-stats"></div>
     <div class="science-progress" id="science-progress"></div>
     <div class="science-insight" id="science-insight"></div>
   </div>
 
-  <button class="gameover-btn" id="gameover-btn" onclick="window.location.reload()">REJOUER</button>
+  <button class="gameover-btn" id="gameover-btn" data-i18n="go_replay" onclick="window.location.reload()">REJOUER</button>
 </div>
 
 <script type="importmap">
@@ -3427,7 +3427,7 @@ function destroyPirate(pirate) {
   spawnDeathExplosion(px + 3, pz - 2);
   spawnSplash(px, pz);
   spawnSplash(px + 4, pz + 2);
-  spawnFloatingText(px, pz, 'NAVIRE COULÉ !', '#ffaa00');
+  spawnFloatingText(px, pz, tr('float_ship_sunk'), '#ffaa00');
   if (sfx && sfx.death) sfx.death();
   // Remove mesh + ring
   const mesh = pirateMeshes.get(pirate.id);
@@ -6493,9 +6493,9 @@ function onModelProgress(name) {
   modelsLoadedCount++;
   const pct = Math.round((modelsLoadedCount / TOTAL_MODELS) * 100);
   loadingBar.style.width = pct + '%';
-  loadingStatus.textContent = name + ' charg\u00E9 (' + modelsLoadedCount + '/' + TOTAL_MODELS + ')';
+  loadingStatus.textContent = name + tr('loading_loaded_suffix') + ' (' + modelsLoadedCount + '/' + TOTAL_MODELS + ')';
   if (modelsLoadedCount >= TOTAL_MODELS) {
-    loadingStatus.textContent = 'Tous les mod\u00E8les charg\u00E9s !';
+    loadingStatus.textContent = tr('loading_all_done');
     loadingFinished = true;
     if (introFinished) {
       setTimeout(showStartScreen, 400);
@@ -8003,7 +8003,7 @@ window.addEventListener('keydown', (e) => {
   if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !fireCharging) {
     if (localPlayer.totalCollected < FIREBALL_UNLOCK_COST) {
       spawnFloatingText(localPlayer.x, localPlayer.z,
-        'Boule de feu : ' + localPlayer.totalCollected + '/' + FIREBALL_UNLOCK_COST,
+        tr('float_fireball_prefix') + ' ' + localPlayer.totalCollected + '/' + FIREBALL_UNLOCK_COST,
         '#888899');
       e.preventDefault();
       return;
@@ -8385,188 +8385,233 @@ const TIPS = [
   // prio: 10 = critical/game-ending, 7 = major event, 5 = situational,
   // 3 = coaching, 1 = flavor/intro. Higher-prio tips preempt lower ones.
   { id: 'intro-1', prio: 6,
-    html: 'Salut. Je suis ta conscience. Et ton co-pilote.',
+    html:   'Salut. Je suis ta conscience. Et ton co-pilote.',
+    htmlEn: "Hi. I'm your conscience. And your co-pilot.",
     cond: () => gameTime > 0.8,
   },
   { id: 'intro-2', prio: 6,
-    html: 'MEILLEUR CO-PILOTE DU MONDE d\u2019ailleurs !!! Bon. On y va.',
+    html:   'MEILLEUR CO-PILOTE DU MONDE d\u2019ailleurs !!! Bon. On y va.',
+    htmlEn: "BEST CO-PILOT IN THE WORLD by the way !!! Ok. Let\u2019s go.",
     cond: () => gameTime > 7.5 && !!_seenTips['intro-1'],
   },
   { id: 'intro-3', prio: 6,
-    html: 'La mission : un oc\u00E9an, des d\u00E9chets, un bateau solaire. Tu nettoies, l\u2019IA apprend.',
+    html:   'La mission : un oc\u00E9an, des d\u00E9chets, un bateau solaire. Tu nettoies, l\u2019IA apprend.',
+    htmlEn: "The mission: an ocean, debris, a solar boat. You clean, the AI learns.",
     cond: () => gameTime > 13 && !!_seenTips['intro-2'],
   },
   { id: 'move', prio: 2,
-    html: 'On attend quoi ? <span class="tip-key">ZQSD</span>. L\u2019oc\u00E9an se nettoie pas tout seul.',
+    html:   'On attend quoi ? <span class="tip-key">ZQSD</span>. L\u2019oc\u00E9an se nettoie pas tout seul.',
+    htmlEn: 'What are we waiting for ? <span class="tip-key">WASD</span>. The ocean won\u2019t clean itself.',
     cond: () => !_playerMoving() && gameTime > 18 && !!_seenTips['intro-3'],
   },
   { id: 'boost', prio: 2,
-    html: 'On BR\u00DBLE le plastique pour le turbo !!! <span class="tip-key">ESPACE</span> !!! J\u2019A-DO-RE !',
+    html:   'On BR\u00DBLE le plastique pour le turbo !!! <span class="tip-key">ESPACE</span> !!! J\u2019A-DO-RE !',
+    htmlEn: 'We BURN plastic for turbo !!! <span class="tip-key">SPACE</span> !!! I-LOVE-IT !',
     cond: () => _playerMoving() && !input.boost && gameTime > 20 && localPlayer.boostEnergy > 0.3,
   },
   { id: 'collect', prio: 2,
-    html: 'Une bouteille = <b>450 ans</b> de demi-vie. Fonce dessus.',
+    html:   'Une bouteille = <b>450 ans</b> de demi-vie. Fonce dessus.',
+    htmlEn: 'A bottle = <b>450 years</b> half-life. Go grab it.',
     cond: () => localPlayer.totalCollected === 0 && gameTime > 22,
   },
   { id: 'pink', prio: 5,
-    html: 'Le <b style="color:#ff66aa">rose</b> te soigne. Prends. Ne discute pas.',
+    html:   'Le <b style="color:#ff66aa">rose</b> te soigne. Prends. Ne discute pas.',
+    htmlEn: '<b style="color:#ff66aa">Pink</b> heals you. Take it. Don\u2019t argue.',
     cond: () => _pinkPlasticNear() && localPlayer.health < MAX_HEALTH * 0.85,
   },
   { id: 'combo', prio: 4,
-    html: '<b style="color:#ffd93d">COMBO</b>. Mouais. Pas mal.',
+    html:   '<b style="color:#ffd93d">COMBO</b>. Mouais. Pas mal.',
+    htmlEn: '<b style="color:#ffd93d">COMBO</b>. Meh. Not bad.',
     cond: () => comboCount >= 2,
   },
   { id: 'combo-big', prio: 7,
-    html: 'COMBO x<b>5</b> !!! J\u2019AI CHOISI LE BON CAPITAINE !!! \uD83D\uDCAF',
+    html:   'COMBO x<b>5</b> !!! J\u2019AI CHOISI LE BON CAPITAINE !!! \uD83D\uDCAF',
+    htmlEn: 'COMBO x<b>5</b> !!! I PICKED THE RIGHT CAPTAIN !!! \uD83D\uDCAF',
     cond: () => comboCount >= 5,
   },
   { id: 'hydro', prio: 5,
-    html: 'L\u2019<b style="color:#00ffcc">Hydronaute</b> travaille. Tu t\u2019\u00E9loignes.',
+    html:   'L\u2019<b style="color:#00ffcc">Hydronaute</b> travaille. Tu t\u2019\u00E9loignes.',
+    htmlEn: 'The <b style="color:#00ffcc">Hydronaute</b> is working. Back off.',
     cond: () => _hydronautVisible(),
   },
   { id: 'pirate', prio: 7,
-    html: 'Pirate. Tu peux fuir, ou le descendre avec <span class="tip-key">SHIFT</span>. Je dis \u00E7a, je dis rien.',
+    html:   'Pirate. Tu peux fuir, ou le descendre avec <span class="tip-key">SHIFT</span>. Je dis \u00E7a, je dis rien.',
+    htmlEn: 'Pirate. Flee, or drop them with <span class="tip-key">SHIFT</span>. Just saying.',
     cond: () => _visiblePirate(),
   },
   { id: 'whale', prio: 7,
-    html: '<b style="color:#4488cc">Baleine</b>. 56% en avalent du plastique. Respect total.',
+    html:   '<b style="color:#4488cc">Baleine</b>. 56% en avalent du plastique. Respect total.',
+    htmlEn: '<b style="color:#4488cc">Whale</b>. 56% of cetaceans have swallowed plastic. Full respect.',
     cond: () => _whaleSurfacedVisible(),
   },
   { id: 'spout', prio: 9,
-    html: 'Souffle blanc = elle remonte sous toi. Bouge.',
+    html:   'Souffle blanc = elle remonte sous toi. Bouge.',
+    htmlEn: 'White spout = she\u2019s surfacing under you. Move.',
     cond: () => whaleSpoutParticles.length > 0,
   },
   { id: 'ram', prio: 5,
-    html: 'TURBO + PIRATE = POESIE !!! (Si tu choisis de taper, bien s\u00FBr.)',
+    html:   'TURBO + PIRATE = POESIE !!! (Si tu choisis de taper, bien s\u00FBr.)',
+    htmlEn: 'TURBO + PIRATE = POETRY !!! (If you choose to ram, of course.)',
     cond: () => _closePirate() && input.boost,
   },
   { id: 'mine', prio: 9,
-    html: 'Zone rouge : \u00E9vite. C\u2019est pas n\u00E9gociable.',
+    html:   'Zone rouge : \u00E9vite. C\u2019est pas n\u00E9gociable.',
+    htmlEn: 'Red zone: avoid. Non-negotiable.',
     cond: () => _mineOrBombNear(),
   },
   { id: 'hide', prio: 6,
-    html: 'Derri\u00E8re l\u2019\u00EEle. Les pirates voient plus rien.',
+    html:   'Derri\u00E8re l\u2019\u00EEle. Les pirates voient plus rien.',
+    htmlEn: 'Behind the island. Pirates lose sight.',
     cond: () => _closePirate() && localPlayer.health < MAX_HEALTH * 0.6,
   },
   // -------- COACHING TIPS (reactive to what the player ISN'T doing) --------
   { id: 'coach-boost', prio: 3,
-    html: 'T\u2019as du plastique \u00E0 cramer pour le turbo. <span class="tip-key">ESPACE</span>. FAUT QUE JE LE FASSE MOI-M\u00CAME ?!',
+    html:   'T\u2019as du plastique \u00E0 cramer pour le turbo. <span class="tip-key">ESPACE</span>. FAUT QUE JE LE FASSE MOI-M\u00CAME ?!',
+    htmlEn: 'You have plastic to burn for turbo. <span class="tip-key">SPACE</span>. DO I HAVE TO DO IT MYSELF ?!',
     cond: () => !_tutStats.hasBoosted && gameTime > 10 && localPlayer.boostEnergy > 0.3 && _playerMoving(),
   },
   { id: 'coach-fire-pirate', prio: 6,
-    html: 'Juste pour info : les pirates meurent aussi si tu tires. <span class="tip-key">SHIFT</span>. Ou pas. Libre.',
+    html:   'Juste pour info : les pirates meurent aussi si tu tires. <span class="tip-key">SHIFT</span>. Ou pas. Libre.',
+    htmlEn: 'Just saying: pirates die too if you shoot. <span class="tip-key">SHIFT</span>. Or not. Free.',
     cond: () => _visiblePirate() && !_tutStats.hasFired && localPlayer.totalCollected >= FIREBALL_UNLOCK_COST && localPlayer.boostEnergy > 0.25,
   },
   { id: 'coach-fire-general', prio: 3,
-    html: 'Boule de feu d\u00E9bloqu\u00E9e. <span class="tip-key">SHIFT</span> si t\u2019as envie. Pas obligatoire.',
+    html:   'Boule de feu d\u00E9bloqu\u00E9e. <span class="tip-key">SHIFT</span> si t\u2019as envie. Pas obligatoire.',
+    htmlEn: 'Fireball unlocked. <span class="tip-key">SHIFT</span> if you feel like it. Not mandatory.',
     cond: () => !_tutStats.hasFired && localPlayer.totalCollected >= FIREBALL_UNLOCK_COST && gameTime > 45 && localPlayer.boostEnergy > 0.3,
   },
   { id: 'coach-fire-locked', prio: 3,
-    html: '\u00C0 <b>50</b> plastiques, boule de feu. T\u2019approches. Respire.',
+    html:   '\u00C0 <b>50</b> plastiques, boule de feu. T\u2019approches. Respire.',
+    htmlEn: 'At <b>50</b> plastic, fireball unlocks. You\u2019re getting there. Breathe.',
     cond: () => localPlayer.totalCollected >= 25 && localPlayer.totalCollected < FIREBALL_UNLOCK_COST,
   },
   { id: 'coach-low-hp', prio: 10,
-    html: 'T\u2019ES EN PLS !!! ROSE !!! MAINTENANT !!!',
+    html:   'T\u2019ES EN PLS !!! ROSE !!! MAINTENANT !!!',
+    htmlEn: 'YOU\u2019RE CRITICAL !!! PINK !!! NOW !!!',
     cond: () => localPlayer.health < MAX_HEALTH * 0.35 && garbage.some(g => g && g.isHeal),
   },
   { id: 'rank-last', prio: 4,
-    html: 'Dernier. J\u2019ai honte. J\u2019ai tellement honte.',
+    html:   'Dernier. J\u2019ai honte. J\u2019ai tellement honte.',
+    htmlEn: 'Last. I am ashamed. So ashamed.',
     cond: () => gameTime > 35 && _totalRacers() >= 3 && _playerRank() === _totalRacers(),
   },
   { id: 'rank-first', prio: 5,
-    html: 'PREMIER !!! ON EST LES ROIS !!! LES DIEUX !!! LES L\u00C9GENDES !!!',
+    html:   'PREMIER !!! ON EST LES ROIS !!! LES DIEUX !!! LES L\u00C9GENDES !!!',
+    htmlEn: 'FIRST !!! WE ARE KINGS !!! GODS !!! LEGENDS !!!',
     cond: () => gameTime > 25 && _totalRacers() >= 2 && _playerRank() === 1 && localPlayer.totalCollected >= 15,
   },
   { id: 'coach-idle-collect', prio: 3,
-    html: 'On fait quoi, l\u00E0, on m\u00E9dite ? Le 7\u1D49 continent t\u2019attend.',
+    html:   'On fait quoi, l\u00E0, on m\u00E9dite ? Le 7\u1D49 continent t\u2019attend.',
+    htmlEn: 'What are we doing, meditating ? The 7\u1D57\u02B0 continent is waiting.',
     cond: () => gameTime > 25 && (gameTime - _tutStats.lastCollectTime) > 20,
   },
   { id: 'coach-being-hit', prio: 8,
-    html: 'Tu prends des tartes en s\u00E9rie. \u00C7a me fait mal, physiquement.',
+    html:   'Tu prends des tartes en s\u00E9rie. \u00C7a me fait mal, physiquement.',
+    htmlEn: 'You\u2019re getting slapped around. It hurts me physically.',
     cond: () => _tutStats.hitCount >= 3 && (gameTime - _tutStats.lastHitTime) < 4,
   },
   // -------- Event-driven 4th-wall triggers --------
   { id: 'first-boost', prio: 6,
-    html: 'AH OUI !!! ON CRAME DU PLASTIQUE POUR AVANCER !!! L\u2019ABSURDE POETIQUE !!!',
+    html:   'AH OUI !!! ON CRAME DU PLASTIQUE POUR AVANCER !!! L\u2019ABSURDE POETIQUE !!!',
+    htmlEn: 'OH YES !!! WE BURN PLASTIC TO GO FAST !!! POETIC ABSURDITY !!!',
     cond: () => _tutStats.hasBoosted && (gameTime - _tutStats.firstBoostTime) < 0.6,
   },
   { id: 'first-fire', prio: 6,
-    html: 'PREMIERE BOULE DE FEU !!! LE FEU !!! Oh c\u2019\u00E9tait magnifique.',
+    html:   'PREMIERE BOULE DE FEU !!! LE FEU !!! Oh c\u2019\u00E9tait magnifique.',
+    htmlEn: 'FIRST FIREBALL !!! THE FIRE !!! Oh that was beautiful.',
     cond: () => _tutStats.hasFired && (gameTime - _tutStats.lastFireTime) < 0.6 && !_seenTips['first-fire'],
   },
   { id: 'upgrade-first', prio: 3,
-    html: 'Premier <b>module</b> bient\u00F4t d\u00E9bloqu\u00E9. Pr\u00E9pare-toi mentalement.',
+    html:   'Premier <b>module</b> bient\u00F4t d\u00E9bloqu\u00E9. Pr\u00E9pare-toi mentalement.',
+    htmlEn: 'First <b>module</b> unlocking soon. Prepare yourself mentally.',
     cond: () => !upgradeActive && localPlayer.totalCollected >= 10 && localPlayer.totalCollected < 20 && (playerUpgrades.speed + playerUpgrades.magnet + playerUpgrades.solar_panel) === 0,
   },
   { id: 'upgrade-open', prio: 8,
-    html: 'MODULE DISPONIBLE !!! Choisis : <b style="color:#ffbe3a">Vitesse</b>, <b style="color:#6fd6ff">Aimant</b>, <b style="color:#ffe380">Solaire</b>.',
+    html:   'MODULE DISPONIBLE !!! Choisis : <b style="color:#ffbe3a">Vitesse</b>, <b style="color:#6fd6ff">Aimant</b>, <b style="color:#ffe380">Solaire</b>.',
+    htmlEn: 'MODULE AVAILABLE !!! Choose: <b style="color:#ffbe3a">Speed</b>, <b style="color:#6fd6ff">Magnet</b>, <b style="color:#ffe380">Solar</b>.',
     cond: () => upgradeActive,
   },
   { id: 'upgrade-speed', prio: 4,
-    html: 'Vitesse +1. On avance plus vite, on nettoie plus. L\u2019\u00E9quation est belle.',
+    html:   'Vitesse +1. On avance plus vite, on nettoie plus. L\u2019\u00E9quation est belle.',
+    htmlEn: 'Speed +1. We go faster, we clean more. Beautiful equation.',
     cond: () => !upgradeActive && playerUpgrades.speed >= 1 && gameTime > 15 && !_seenTips['upgrade-speed'],
   },
   { id: 'upgrade-magnet', prio: 4,
-    html: 'Aimant \u00E9quip\u00E9. Les microplastiques viennent \u00E0 toi maintenant. Classe.',
+    html:   'Aimant \u00E9quip\u00E9. Les microplastiques viennent \u00E0 toi maintenant. Classe.',
+    htmlEn: 'Magnet equipped. Microplastics come to you now. Classy.',
     cond: () => !upgradeActive && playerUpgrades.magnet >= 1 && gameTime > 15 && !_seenTips['upgrade-magnet'],
   },
   { id: 'upgrade-solar', prio: 4,
-    html: 'Panneau solaire. L\u2019\u00E9nergie recharge toute seule. J\u2019aime.',
+    html:   'Panneau solaire. L\u2019\u00E9nergie recharge toute seule. J\u2019aime.',
+    htmlEn: 'Solar panel. Energy recharges on its own. Love it.',
     cond: () => !upgradeActive && playerUpgrades.solar_panel >= 1 && gameTime > 15 && !_seenTips['upgrade-solar'],
   },
   { id: 'upgrade-stacked', prio: 5,
-    html: 'Module +2 empil\u00E9 !!! Ton bateau devient une BETE !!!',
+    html:   'Module +2 empil\u00E9 !!! Ton bateau devient une BETE !!!',
+    htmlEn: 'Module +2 stacked !!! Your boat is becoming a BEAST !!!',
     cond: () => !upgradeActive && (playerUpgrades.speed >= 2 || playerUpgrades.magnet >= 2 || playerUpgrades.solar_panel >= 2),
   },
-  // Double-module euphoria: two different modules equipped (one of each
-  // type) within the same run.
   { id: 'upgrade-double', prio: 7,
-    html: 'DEUX MODULES !!! DIFFERENTS !!! T\u2019ES EN TRAIN DE RETROFITTER UN BATEAU EN DIRECT !!!',
+    html:   'DEUX MODULES !!! DIFFERENTS !!! T\u2019ES EN TRAIN DE RETROFITTER UN BATEAU EN DIRECT !!!',
+    htmlEn: 'TWO MODULES !!! DIFFERENT !!! YOU\u2019RE RETROFITTING A BOAT LIVE !!!',
     cond: () => !upgradeActive && ((playerUpgrades.speed >= 1 ? 1 : 0) + (playerUpgrades.magnet >= 1 ? 1 : 0) + (playerUpgrades.solar_panel >= 1 ? 1 : 0)) >= 2,
   },
-  // Full loadout: one of each — the robot loses it completely.
   { id: 'upgrade-full', prio: 8,
-    html: 'LES TROIS MODULES !!! VITESSE, AIMANT, SOLAIRE !!! LA SAINTE TRINITE !!! CAPITAINE JE T\u2019AIME !!!',
+    html:   'LES TROIS MODULES !!! VITESSE, AIMANT, SOLAIRE !!! LA SAINTE TRINITE !!! CAPITAINE JE T\u2019AIME !!!',
+    htmlEn: 'ALL THREE MODULES !!! SPEED, MAGNET, SOLAR !!! THE HOLY TRINITY !!! CAPTAIN I LOVE YOU !!!',
     cond: () => !upgradeActive && playerUpgrades.speed >= 1 && playerUpgrades.magnet >= 1 && playerUpgrades.solar_panel >= 1,
   },
-  // Combo ladder — the excitement ramps per tier.
   { id: 'combo-huge', prio: 8,
-    html: 'COMBO x<b>8</b> !!! IL EST POSSEDE !!! NE LE TOUCHEZ PAS !!!',
+    html:   'COMBO x<b>8</b> !!! IL EST POSSEDE !!! NE LE TOUCHEZ PAS !!!',
+    htmlEn: 'COMBO x<b>8</b> !!! HE\u2019S POSSESSED !!! DO NOT TOUCH HIM !!!',
     cond: () => comboCount >= 8,
   },
   { id: 'combo-insane', prio: 9,
-    html: 'COMBO x<b>10</b> !!! STATISTIQUEMENT IMPOSSIBLE !!! JE SUIS BOULEVERSE !!!',
+    html:   'COMBO x<b>10</b> !!! STATISTIQUEMENT IMPOSSIBLE !!! JE SUIS BOULEVERSE !!!',
+    htmlEn: 'COMBO x<b>10</b> !!! STATISTICALLY IMPOSSIBLE !!! I AM SHAKEN !!!',
     cond: () => comboCount >= 10,
   },
   { id: 'post-respawn', prio: 5,
-    html: 'Et c\u2019est reparti. Entre nous, je te regardais couler.',
+    html:   'Et c\u2019est reparti. Entre nous, je te regardais couler.',
+    htmlEn: 'And we\u2019re back. Between us, I was watching you sink.',
     cond: () => !respawnActive && _tutStats.hitCount > 0 && localPlayer.health > MAX_HEALTH * 0.9 && gameTime > 20,
   },
   { id: 'low-time', prio: 9,
-    html: '<b>30 secondes</b>. ON LACHE RIEN CAPITAINE !',
+    html:   '<b>30 secondes</b>. ON LACHE RIEN CAPITAINE !',
+    htmlEn: '<b>30 seconds</b>. WE HOLD THE LINE CAPTAIN !',
     cond: () => gameTimeRemaining <= 30 && gameTimeRemaining > 10 && !gameOver,
   },
   { id: 'last-10s', prio: 10,
-    html: '10 SECONDES !!! TOUT CE QUI FLOTTE !!! MAINTENANT !!!',
+    html:   '10 SECONDES !!! TOUT CE QUI FLOTTE !!! MAINTENANT !!!',
+    htmlEn: '10 SECONDS !!! EVERYTHING THAT FLOATS !!! NOW !!!',
     cond: () => gameTimeRemaining <= 10 && gameTimeRemaining > 0 && !gameOver,
   },
   { id: 'collected-100', prio: 5,
-    html: '<b>100</b> plastiques !!! J\u2019Y CROYAIS PAS !!! Je retire tout ce que j\u2019ai dit !',
+    html:   '<b>100</b> plastiques !!! J\u2019Y CROYAIS PAS !!! Je retire tout ce que j\u2019ai dit !',
+    htmlEn: '<b>100</b> plastic !!! I DIDN\u2019T BELIEVE IT !!! I take back everything I said !',
     cond: () => localPlayer.totalCollected >= 100,
   },
   { id: 'meta-no-sense', prio: 1,
-    html: 'Un robot qui parle, un bateau solaire, des pirates. Ne cherche pas.',
+    html:   'Un robot qui parle, un bateau solaire, des pirates. Ne cherche pas.',
+    htmlEn: 'A talking robot, a solar boat, pirates. Don\u2019t overthink it.',
     cond: () => gameTime > 70 && gameTime < 95,
   },
   { id: 'meta-watching', prio: 2,
-    html: 'Je t\u2019ai vu heurter cette \u00EEle. Je juge en silence.',
+    html:   'Je t\u2019ai vu heurter cette \u00EEle. Je juge en silence.',
+    htmlEn: 'I saw you hit that island. I\u2019m judging silently.',
     cond: () => _tutStats.hitCount >= 1 && gameTime > 30 && (gameTime - _tutStats.lastHitTime) < 2 && !_visiblePirate(),
   },
   { id: 'wave-two-taunt', prio: 9,
-    html: 'TROIS pirates !!! PARCE QUE POURQUOI PAS !!!',
+    html:   'TROIS pirates !!! PARCE QUE POURQUOI PAS !!!',
+    htmlEn: 'THREE pirates !!! BECAUSE WHY NOT !!!',
     cond: () => extraPirateWave2 && gameTime > GAME_DURATION - 28,
   },
 ];
+// Pick the language-appropriate payload for a tip, falling back to FR.
+function _tipHtml(tip) {
+  if (_currentLang === 'en' && tip.htmlEn) return tip.htmlEn;
+  return tip.html;
+}
 
 const _seenTips = Object.create(null);
 let _activeTip = null;       // { tip, showTime, hideAt }
@@ -8633,7 +8678,7 @@ function updateTips(dt) {
   }
   tipsEl.classList.add('active');
   if (repoCanvasEl) repoCanvasEl.classList.add('talking');
-  _typewriteTip(best.tip.html);
+  _typewriteTip(_tipHtml(best.tip));
   // High-priority tips linger a touch longer so they can be read.
   const hold = best.prio >= 9 ? 7.5 : best.prio >= 6 ? 6.5 : 5.5;
   _activeTip = { tip: best.tip, showTime: gameTime, hideAt: gameTime + hold };
@@ -9612,7 +9657,7 @@ function showGameOver() {
 
   if (isVictory) {
     sfx.victory();
-    titleEl.textContent = 'VICTOIRE !';
+    titleEl.textContent = tr('go_victory');
     titleEl.classList.add('victory');
     overlay.classList.add('victory-bg');
     // Dancing crab removed at the user's request — just confetti now.
@@ -9621,16 +9666,16 @@ function showGameOver() {
     setTimeout(spawnConfetti, 1500);
   } else {
     sfx.gameOver();
-    titleEl.textContent = rank <= 3 ? 'BIEN JOU\u00C9 !' : 'TEMPS \u00C9COUL\u00C9 !';
+    titleEl.textContent = rank <= 3 ? tr('go_welldone') : tr('go_timesup');
     titleEl.classList.remove('victory');
     overlay.classList.remove('victory-bg');
     trophyEl.style.display = 'none';
   }
 
-  document.getElementById('gameover-score').textContent = 'Score : ' + localPlayer.totalCollected + ' plastiques collect\u00E9s';
+  document.getElementById('gameover-score').textContent = tr('go_score_label') + ': ' + localPlayer.totalCollected + ' ' + tr('go_plastic_suffix');
   document.getElementById('gameover-rank').textContent = isVictory
-    ? '\u{1F451} #1 \u2014 CHAMPION !'
-    : 'Rang : #' + rank + ' sur ' + allEntries.length;
+    ? tr('go_champion')
+    : tr('go_rank_label') + ': #' + rank + ' ' + tr('go_rank_of') + ' ' + allEntries.length;
 
   // ---- Science recap: Hydronaute AI training report ----
   // We replaced the 3D boat hologram with a CSS scan-bar animation (one less
@@ -10509,12 +10554,12 @@ function updateHydroVisuals(dt) {
   }
 
   let mode;
-  if (closestThreatDist < 15)         mode = 'évitement de collision';
-  else if (speed < 1.0)               mode = 'étude de la zone';
-  else if (dist2center < ISLAND_RADIUS + 25) mode = 'longeage du littoral';
-  else if (speed > 14)                mode = 'navigation rapide';
-  else                                mode = 'exploration';
-  statusEl.textContent = 'Mode : ' + mode;
+  if (closestThreatDist < 15)         mode = tr('hydro_mode_avoid');
+  else if (speed < 1.0)               mode = tr('hydro_mode_study');
+  else if (dist2center < ISLAND_RADIUS + 25) mode = tr('hydro_mode_coast');
+  else if (speed > 14)                mode = tr('hydro_mode_fast');
+  else                                mode = tr('hydro_mode_explore');
+  statusEl.textContent = tr('hydro_mode_prefix') + ' ' + mode;
 
   // Learning score — grows from distance traveled + evasions, NOT plastic
   const distInc = speed * dt * 0.4;                 // steady growth as she patrols
@@ -11573,18 +11618,18 @@ function gameLoop(timestamp) {
   if (!pirateFirstSpawned && gameTime >= PIRATE_FIRST_SPAWN_TIME) {
     pirateFirstSpawned = true;
     for (let i = 0; i < PIRATE_COUNT; i++) makePirateEntity(i);
-    spawnFloatingText(0, 0, 'PIRATES EN APPROCHE !', '#ff4422');
+    spawnFloatingText(0, 0, tr('float_pirates_incoming'), '#ff4422');
   }
   if (!extraPirateWave1 && gameTime >= GAME_DURATION - 60) {
     extraPirateWave1 = true;
     makePirateEntity(pirates.length, true);
-    spawnFloatingText(0, 0, 'RENFORT PIRATE !', '#ff2200');
+    spawnFloatingText(0, 0, tr('float_pirate_reinforcement'), '#ff2200');
   }
   if (!extraPirateWave2 && gameTime >= GAME_DURATION - 30) {
     extraPirateWave2 = true;
     _wave2StartTime = performance.now() / 1000;
     makePirateEntity(pirates.length, true);
-    spawnFloatingText(0, 0, 'DERNIER RENFORT !', '#ff2200');
+    spawnFloatingText(0, 0, tr('float_last_reinforcement'), '#ff2200');
   }
 
   // --- Pre-ending fade-out ---
@@ -13588,6 +13633,63 @@ const I18N_STRINGS = {
     protocol_body: 'Ce jeu est un terrain d\u2019entra\u00EEnement pour le mod\u00E8le d\u2019<b>\u00E9vitement d\u2019obstacles</b> de l\u2019Hydronaute. L\u2019IA <b>ne copie pas</b> tes mouvements &mdash; elle apprend \u00E0 <b>les \u00E9viter</b>. Chaque partie g\u00E9n\u00E8re un sc\u00E9nario d\u2019obstacles mobiles (toi, les pirates, la baleine, les bateaux rivaux) que le mod\u00E8le doit contourner sans collision. Les trajectoires enregistr\u00E9es alimentent un dataset qui sert \u00E0 calibrer la logique d\u2019\u00E9vitement embarqu\u00E9e sur les vrais bateaux retrofitt\u00E9s. Le protocole complet (m\u00E9thodologie, consentement, traitement des donn\u00E9es, comit\u00E9 \u00E9thique) sera publi\u00E9 ici prochainement.',
     protocol_close: 'Fermer',
     hero_caption: 'D\u00E9velopp\u00E9 par Biutopic',
+    // HUD
+    hud_hp: 'Vie',
+    hud_energy: '\u00C9nergie',
+    hud_plastic: 'Plastique',
+    hud_upgrade_label: 'AM\u00C9LIORATION',
+    hud_fireball_label: 'BOULE DE FEU',
+    hud_leaderboard: 'CLASSEMENT',
+    hud_hydro_title: '\uD83E\uDD16 HYDRONAUTE IA',
+    hud_low_hp_warn: 'Ramasse les d\u00E9chets ROSES pour r\u00E9cup\u00E9rer de la vie !',
+    fb_unlock_title: '\uD83D\uDD25 BOULE DE FEU D\u00C9BLOQU\u00C9E !',
+    fb_unlock_sub: 'Appuie sur <b>SHIFT</b> pour tirer sur les pirates',
+    controls_hint: 'ZQSD Naviguer &middot; Espace Boost &middot; Shift Boule de feu &middot; \u00C9vitez Baleine &amp; Hydronaute !',
+    respawn_title: 'NAUFRAGE',
+    exo_arrow_text: '\u2699 R\u00C9CUP\u00C8RE TES MODULES PERDUS',
+    hydro_warn: '\u26A0 L\u2019HYDRONAUTE EST PROT\u00C9G\u00C9E !<br><span>Ne l\u2019attaquez pas \u2014 vous subissez les d\u00E9g\u00E2ts</span>',
+    // Upgrade overlay
+    upg_title: 'NIVEAU SUP\u00C9RIEUR !',
+    upg_subtitle: 'Choisis une am\u00E9lioration',
+    upg_solar_name: 'Panneau Solaire',
+    upg_solar_desc: 'Le turbo dure plus longtemps',
+    upg_speed_name: 'Vitesse',
+    upg_speed_desc: '+10 vitesse',
+    upg_magnet_name: 'Aimant',
+    upg_magnet_desc: 'Attire le plastique vers toi',
+    upg_keys: 'Appuie 1/2/3 ou A/D + Entr\u00E9e pour choisir',
+    // Game over
+    go_victory: 'VICTOIRE !',
+    go_welldone: 'BIEN JOU\u00C9 !',
+    go_timesup: 'TEMPS \u00C9COUL\u00C9 !',
+    go_champion: '\uD83D\uDC51 #1 \u2014 CHAMPION !',
+    go_score_label: 'Score',
+    go_rank_label: 'Rang',
+    go_rank_of: 'sur',
+    go_plastic_suffix: 'plastiques collect\u00E9s',
+    go_replay: 'REJOUER',
+    science_header: 'RAPPORT D\u2019ENTRA\u00CENEMENT IA',
+    science_subtitle: 'Donn\u00E9es g\u00E9n\u00E9r\u00E9es pour l\u2019apprentissage de l\u2019Hydronaute',
+    science_scan_label: 'HYDRONAUTE // ANALYSE',
+    science_scan_readout: '// Corr\u00E9lation des donn\u00E9es de mission...',
+    // Loading
+    loading_status: 'Chargement des mod\u00E8les...',
+    loading_loaded_suffix: ' charg\u00E9',
+    loading_all_done: 'Tous les mod\u00E8les charg\u00E9s !',
+    intro_presents: 'pr\u00E9sente',
+    // Floating text
+    float_ship_sunk: 'NAVIRE COUL\u00C9 !',
+    float_pirates_incoming: 'PIRATES EN APPROCHE !',
+    float_pirate_reinforcement: 'RENFORT PIRATE !',
+    float_last_reinforcement: 'DERNIER RENFORT !',
+    float_fireball_prefix: 'Boule de feu :',
+    // Hydronaute status modes
+    hydro_mode_prefix: 'Mode :',
+    hydro_mode_avoid: '\u00E9vitement de collision',
+    hydro_mode_study: '\u00E9tude de la zone',
+    hydro_mode_coast: 'longeage du littoral',
+    hydro_mode_fast: 'navigation rapide',
+    hydro_mode_explore: 'exploration',
   },
   en: {
     subtitle: 'a game that trains an obstacle-avoidance model',
@@ -13608,9 +13710,77 @@ const I18N_STRINGS = {
     protocol_body: 'This game is a training ground for the Hydronaute\u2019s <b>obstacle-avoidance</b> model. The AI <b>does not copy</b> your moves &mdash; it learns to <b>avoid them</b>. Every run produces a scenario of moving obstacles (you, the pirates, the whale, rival boats) that the model must navigate around safely. Recorded trajectories feed a dataset used to calibrate the onboard avoidance logic on real retrofitted vessels. The full protocol (methodology, consent, data handling, ethics board) will be published here soon.',
     protocol_close: 'Close',
     hero_caption: 'Developed by Biutopic',
+    // HUD
+    hud_hp: 'Life',
+    hud_energy: 'Energy',
+    hud_plastic: 'Plastic',
+    hud_upgrade_label: 'UPGRADE',
+    hud_fireball_label: 'FIREBALL',
+    hud_leaderboard: 'LEADERBOARD',
+    hud_hydro_title: '\uD83E\uDD16 HYDRONAUTE AI',
+    hud_low_hp_warn: 'Grab the PINK debris to restore your health !',
+    fb_unlock_title: '\uD83D\uDD25 FIREBALL UNLOCKED !',
+    fb_unlock_sub: 'Press <b>SHIFT</b> to shoot pirates',
+    controls_hint: 'WASD Navigate &middot; Space Boost &middot; Shift Fireball &middot; Avoid the Whale &amp; Hydronaute !',
+    respawn_title: 'SHIPWRECK',
+    exo_arrow_text: '\u2699 RECOVER YOUR LOST MODULES',
+    hydro_warn: '\u26A0 THE HYDRONAUTE IS PROTECTED !<br><span>Do not attack her \u2014 you take the damage</span>',
+    // Upgrade overlay
+    upg_title: 'LEVEL UP !',
+    upg_subtitle: 'Choose an upgrade',
+    upg_solar_name: 'Solar Panel',
+    upg_solar_desc: 'Turbo lasts longer',
+    upg_speed_name: 'Speed',
+    upg_speed_desc: '+10 speed',
+    upg_magnet_name: 'Magnet',
+    upg_magnet_desc: 'Pulls plastic toward you',
+    upg_keys: 'Press 1/2/3 or A/D + Enter to choose',
+    // Game over
+    go_victory: 'VICTORY !',
+    go_welldone: 'WELL PLAYED !',
+    go_timesup: 'TIME\u2019S UP !',
+    go_champion: '\uD83D\uDC51 #1 \u2014 CHAMPION !',
+    go_score_label: 'Score',
+    go_rank_label: 'Rank',
+    go_rank_of: 'of',
+    go_plastic_suffix: 'plastic collected',
+    go_replay: 'REPLAY',
+    science_header: 'AI TRAINING REPORT',
+    science_subtitle: 'Data generated for the Hydronaute\u2019s learning',
+    science_scan_label: 'HYDRONAUTE // ANALYSIS',
+    science_scan_readout: '// Correlating mission data...',
+    // Loading
+    loading_status: 'Loading models...',
+    loading_loaded_suffix: ' loaded',
+    loading_all_done: 'All models loaded !',
+    intro_presents: 'presents',
+    // Floating text
+    float_ship_sunk: 'SHIP SUNK !',
+    float_pirates_incoming: 'PIRATES INCOMING !',
+    float_pirate_reinforcement: 'PIRATE REINFORCEMENT !',
+    float_last_reinforcement: 'FINAL REINFORCEMENT !',
+    float_fireball_prefix: 'Fireball:',
+    // Hydronaute status modes
+    hydro_mode_prefix: 'Mode:',
+    hydro_mode_avoid: 'collision avoidance',
+    hydro_mode_study: 'area study',
+    hydro_mode_coast: 'coastal hug',
+    hydro_mode_fast: 'fast navigation',
+    hydro_mode_explore: 'exploration',
   },
 };
 let _currentLang = (typeof localStorage !== 'undefined' && localStorage.getItem('tf_lang')) || 'fr';
+// Tiny runtime translator — every non-DOM-static string routes through this.
+// Falls back to French, then to the key itself if the phrase is missing.
+// Named `tr` because the game has existing local vars called `t` inside
+// render functions (e.g. hydroTelemetry alias).
+function tr(key) {
+  const d = I18N_STRINGS[_currentLang] || I18N_STRINGS.fr;
+  if (d[key] != null) return d[key];
+  const fr = I18N_STRINGS.fr;
+  if (fr[key] != null) return fr[key];
+  return key;
+}
 function applyI18n(lang) {
   const dict = I18N_STRINGS[lang] || I18N_STRINGS.fr;
   document.querySelectorAll('[data-i18n]').forEach((el) => {
@@ -13624,6 +13794,13 @@ function applyI18n(lang) {
   document.documentElement.setAttribute('lang', lang);
   _currentLang = lang;
   try { localStorage.setItem('tf_lang', lang); } catch (e) { /* ignore */ }
+  // Re-type the currently visible tip in the new language so it doesn't
+  // stay stuck in the old one until it expires.
+  try {
+    if (typeof _activeTip !== 'undefined' && _activeTip && typeof _typewriteTip === 'function') {
+      _typewriteTip(_tipHtml(_activeTip.tip));
+    }
+  } catch (e) { /* noop */ }
 }
 // Wire up the toggle buttons
 document.querySelectorAll('#lang-toggle .lang-btn').forEach((btn) => {
