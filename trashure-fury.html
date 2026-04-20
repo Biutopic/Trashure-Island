@@ -12157,22 +12157,33 @@ function gameLoop(timestamp) {
   for (const bot of bots) {
     const _mpRemote = _mpRemoteByBotId.get(bot.id);
     if (_mpRemote) {
-      // Ease toward the server pose — smoothing covers the 10 Hz gap.
-      const k = Math.min(1, dt * 12);
-      bot.x += (_mpRemote.x - bot.x) * k;
-      bot.z += (_mpRemote.z - bot.z) * k;
-      let da = _mpRemote.rot - bot.rotation;
-      while (da > Math.PI)  da -= 2 * Math.PI;
-      while (da < -Math.PI) da += 2 * Math.PI;
-      bot.rotation += da * k;
-      // Crude velocity from position delta, so wake/ripples still look right.
-      const vscale = dt > 0 ? 1 / dt : 0;
-      bot.vx = (_mpRemote.x - bot.x) * vscale;
-      bot.vz = (_mpRemote.z - bot.z) * vscale;
+      // Snapshot interpolation: find where this boat should be right
+      // now between the last two snapshots. Render ~100 ms in the
+      // past so we always have a "next" to lerp toward — the classic
+      // multiplayer trick for smooth-but-accurate remote motion.
+      const snap = _mp._boatSnaps && _mp._boatSnaps.get(_mpRemote.pid);
+      if (snap) {
+        const nowMs  = performance.now();
+        const span   = Math.max(1, snap.next.t - snap.prev.t);
+        const alpha  = Math.max(0, Math.min(1, (nowMs - snap.prev.t) / span));
+        const prevX = snap.prev.x, prevZ = snap.prev.z, prevR = snap.prev.rot;
+        const nextX = snap.next.x, nextZ = snap.next.z, nextR = snap.next.rot;
+        const nx = prevX + (nextX - prevX) * alpha;
+        const nz = prevZ + (nextZ - prevZ) * alpha;
+        // Smallest-arc angle interpolation
+        let dr = nextR - prevR;
+        while (dr > Math.PI)  dr -= 2 * Math.PI;
+        while (dr < -Math.PI) dr += 2 * Math.PI;
+        const nr = prevR + dr * alpha;
+        // Derive velocity from the snapshot pair so wakes still read right
+        const vscale = span > 0 ? (1000 / span) : 0;
+        bot.vx = (nextX - prevX) * vscale;
+        bot.vz = (nextZ - prevZ) * vscale;
+        bot.x = nx; bot.z = nz; bot.rotation = nr;
+      }
       bot.name = _mpRemote.name || bot.name;
-      // Still emit a wake so the remote captain feels alive.
       addBoatWake(bot.id, bot.x, bot.z, bot.vx, bot.vz, RIPPLE_BOAT_AMP);
-      continue; // skip local AI, movement, collection, etc.
+      continue; // skip local AI / movement / collection entirely
     }
     let bi = computeBotInput(bot, dt);
     const botUpg = bot.isWhale ? null : (bot.upgrades || null);
@@ -13253,16 +13264,39 @@ function _mpApplyState(state) {
   _mp.phase = state.phase;
   _mp.phaseEndsAt = state.phaseEndsAt;
   _mp.seats = Array.isArray(state.seats) ? state.seats : [];
-  // Refresh who we are + where the other humans are right now.
+  // Refresh who we are + where the other humans are right now. We
+  // keep a prev/next pair per seat so each render frame can linearly
+  // interpolate between the last two snapshots instead of snapping
+  // and looking jittery. New snapshot → promote next→prev and store
+  // the incoming pose as the new next.
   _mp.myPid = _mpPid();
   _mp.mySeatIdx = _mp.seats.findIndex((s) => s && s.kind === 'human' && s.pid === _mp.myPid);
+  const nowMs = performance.now();
   const others = [];
+  if (!_mp._boatSnaps) _mp._boatSnaps = new Map(); // pid -> { prev, next }
+  const seenPids = new Set();
   for (let i = 0; i < _mp.seats.length; i++) {
     if (i === _mp.mySeatIdx) continue;
     const s = _mp.seats[i];
     if (s && s.kind === 'human') {
-      others.push({ seatIdx: i, x: s.x || 0, z: s.z || 0, rot: s.rot || 0, name: s.name, color: s.color });
+      seenPids.add(s.pid);
+      const latest = { x: +s.x || 0, z: +s.z || 0, rot: +s.rot || 0, t: nowMs };
+      const entry = _mp._boatSnaps.get(s.pid);
+      if (!entry) {
+        _mp._boatSnaps.set(s.pid, { prev: latest, next: latest });
+      } else {
+        // Advance the buffer: the old "next" becomes the new "prev"
+        // (starting point for this render interval), and the fresh
+        // snapshot is the new "next" target.
+        entry.prev = entry.next;
+        entry.next = latest;
+      }
+      others.push({ seatIdx: i, pid: s.pid, name: s.name, color: s.color });
     }
+  }
+  // Prune snaps for pids we no longer have.
+  for (const pid of _mp._boatSnaps.keys()) {
+    if (!seenPids.has(pid)) _mp._boatSnaps.delete(pid);
   }
   _mp.remoteBoats = others;
   _mpRenderSeats();
