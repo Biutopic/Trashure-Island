@@ -13057,6 +13057,7 @@ const _mp = {
   wrHint:  null,
   wrReady: null,
   reconnectTimer: null,
+  pingTimer: null,
 };
 
 // Per-tab persistent ID. sessionStorage scopes it to one tab, so two
@@ -13109,6 +13110,14 @@ function _mpConnect() {
   _mp.ws.addEventListener('open', () => {
     const n = (nameInput && nameInput.value || '').trim() || 'Capitaine';
     _mp.ws.send(JSON.stringify({ type: 'hello', name: n }));
+    // Heartbeat: server reaps seats that go silent for >6s, so keep a
+    // 3s cadence to survive occasional missed frames.
+    if (_mp.pingTimer) clearInterval(_mp.pingTimer);
+    _mp.pingTimer = setInterval(() => {
+      if (_mp.ws && _mp.ws.readyState === WebSocket.OPEN) {
+        try { _mp.ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {}
+      }
+    }, 3000);
   });
   _mp.ws.addEventListener('message', (ev) => {
     let data;
@@ -13122,11 +13131,18 @@ function _mpConnect() {
     }
   });
   _mp.ws.addEventListener('close', () => {
+    if (_mp.pingTimer) { clearInterval(_mp.pingTimer); _mp.pingTimer = null; }
     _mpShowHint(tr('wr_disconnected'));
     _mpScheduleReconnect();
   });
   _mp.ws.addEventListener('error', () => {/* close handler will run */});
 }
+// Tab close or navigation: close the WS cleanly so the server fires
+// onClose and reaps the seat immediately (rather than waiting out the
+// 6s heartbeat timeout).
+window.addEventListener('beforeunload', () => {
+  try { if (_mp.ws) _mp.ws.close(); } catch (e) {}
+});
 function _mpScheduleReconnect() {
   if (_mp.reconnectTimer) return;
   _mp.reconnectTimer = setTimeout(() => {

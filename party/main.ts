@@ -18,8 +18,13 @@ type Phase = "LOBBY" | "COUNTDOWN" | "PLAYING" | "RECAP";
 
 type Seat =
   | { kind: "empty" }
-  | { kind: "human"; id: string; pid: string; name: string; ready: boolean; color: string }
+  | { kind: "human"; id: string; pid: string; name: string; ready: boolean; color: string; lastSeenAt: number }
   | { kind: "bot"; name: string; color: string };
+
+// If we haven't heard from a human seat in this long, treat it as a
+// ghost (browser crash, stuck connection, no close frame) and flip
+// it back to a bot so the round state stays honest.
+const GHOST_TIMEOUT_MS = 6_000;
 
 interface RoomState {
   phase: Phase;
@@ -35,7 +40,7 @@ interface RoomState {
 // LOBBY has no auto-timeout: rounds only start when every human clicks
 // READY. The server sets phaseEndsAt to a "quick start" value once the
 // last human readies up, used only for the ~1.5 s settle before the 3-2-1.
-const QUICK_START_MS   = 1_500;
+const QUICK_START_MS   = 30_000; // 30s grace after all humans ready
 const COUNTDOWN_MS     = 3_000;
 const PLAYING_MS       = 180_000; // 3 minutes
 const RECAP_MS         = 15_000;
@@ -108,11 +113,17 @@ export default class TrashureRoom implements Party.Server {
         const seat = this.state.seats[existingIdx] as Extract<Seat, { kind: "human" }>;
         seat.id = conn.id;
         seat.ready = false; // don't carry over stale ready on reconnect
+        seat.lastSeenAt = Date.now();
         this.startTicker();
         this.broadcastState();
         return;
       }
     }
+
+    // Opportunistic cleanup: flush any ghost seats whose last activity
+    // is older than GHOST_TIMEOUT_MS before we seat the new player.
+    // Saves late joiners from landing in a lobby full of zombies.
+    this.reapGhostSeats();
 
     // Mid-round joining is allowed: the player takes over a bot seat
     // and inherits whatever the bot had (position, score — once those
@@ -128,7 +139,7 @@ export default class TrashureRoom implements Party.Server {
     // If we're taking over a bot, keep its color so the leaderboard
     // layout doesn't shuffle mid-round.
     const color = prev.kind === "bot" ? prev.color : COLORS[idx % COLORS.length];
-    this.state.seats[idx] = { kind: "human", id: conn.id, pid, name: "Capitaine", ready: false, color };
+    this.state.seats[idx] = { kind: "human", id: conn.id, pid, name: "Capitaine", ready: false, color, lastSeenAt: Date.now() };
     this.startTicker();
     this.broadcastState();
   }
@@ -138,6 +149,14 @@ export default class TrashureRoom implements Party.Server {
     try { data = JSON.parse(msg); } catch { return; }
 
     const seat = this.findSeatByConn(conn.id);
+    // Refresh the heartbeat on ANY message from this seat. The client
+    // sends a ping every few seconds to keep this fresh even when idle.
+    if (seat?.kind === "human") seat.lastSeenAt = Date.now();
+
+    if (data.type === "ping") {
+      // Heartbeat only; no state change, no broadcast.
+      return;
+    }
 
     if (data.type === "hello" && seat?.kind === "human") {
       const raw = String(data.name ?? "Capitaine").slice(0, 16).trim() || "Capitaine";
@@ -184,19 +203,17 @@ export default class TrashureRoom implements Party.Server {
     }
   }
 
-  // Drop human seats whose connection is no longer live. Covers the case
-  // where a tab closes hard (OS kill, crash, network loss) and onClose
-  // doesn't fire cleanly — prevents "ghost" seats from blocking lobby
-  // logic for other players.
-  private reapStaleSeats(): boolean {
-    const active = new Set<string>();
-    for (const c of this.room.getConnections()) active.add(c.id);
+  // Drop human seats that haven't sent a message (heartbeat or otherwise)
+  // for longer than GHOST_TIMEOUT_MS. Covers the case where a tab died
+  // without sending a WS close frame — PartyKit may still list the
+  // connection as alive, so we can't trust getConnections() alone.
+  private reapGhostSeats(): boolean {
+    const now = Date.now();
     let changed = false;
     for (let i = 0; i < this.state.seats.length; i++) {
       const s = this.state.seats[i];
-      if (s.kind === "human" && !active.has(s.id)) {
-        const prev = s;
-        this.state.seats[i] = { kind: "bot", name: prev.name, color: prev.color };
+      if (s.kind === "human" && now - s.lastSeenAt > GHOST_TIMEOUT_MS) {
+        this.state.seats[i] = { kind: "bot", name: s.name, color: s.color };
         changed = true;
       }
     }
@@ -207,7 +224,7 @@ export default class TrashureRoom implements Party.Server {
   private tick() {
     const now = Date.now();
     // Clean up ghost seats first so the "all ready" check below is honest.
-    if (this.reapStaleSeats()) {
+    if (this.reapGhostSeats()) {
       // If a ghost being reaped breaks the all-ready condition, disarm
       // the quick-start so the remaining solo player isn't catapulted
       // into a round with no real opponent.
