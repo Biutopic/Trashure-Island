@@ -8254,9 +8254,13 @@ let _lbLastHash = '';
 function updateLeaderboard() {
   _lbEntries.length = 0;
   _lbEntries.push({ name: localPlayer.name, score: localPlayer.totalCollected, color: localPlayer.color, isLocal: true });
+  // In online mode, hide rival-bot slots that aren't currently driven
+  // by a remote human (health is zeroed for those in the game loop).
+  const _mpActive = !!(_mp && _mp.ws && _mp.ws.readyState === WebSocket.OPEN && _mp.roundLaunched);
   for (const b of bots) {
     if (b.isWhale) continue;
     if (b.isHydro) continue;
+    if (_mpActive && b.health <= 0) continue;
     _lbEntries.push({ name: b.name, score: b.totalCollected, color: b.color, isLocal: false });
   }
   _lbEntries.sort((a, b) => b.score - a.score);
@@ -13167,7 +13171,9 @@ function _mpStopHeartbeat() {
 function _mpStartBoatUploader() {
   if (_mp.boatUpWorker) _mp.boatUpWorker.terminate();
   try {
-    const code = 'setInterval(function(){ self.postMessage(0); }, 100);';
+    // 20 Hz upload to match the server tick / broadcast rate. Halves
+    // the end-to-end latency vs the previous 10 Hz cadence.
+    const code = 'setInterval(function(){ self.postMessage(0); }, 50);';
     const blob = new Blob([code], { type: 'application/javascript' });
     _mp.boatUpWorker = new Worker(URL.createObjectURL(blob));
     _mp.boatUpWorker.onmessage = () => {
@@ -13475,6 +13481,15 @@ window._beginSolo = beginSolo;
 // in beginGame() which routes through the lobby first.
 function _beginLocalRound() {
   localPlayer.name = nameInput.value.trim() || 'Capitaine';
+  // In online multiplayer, put each player at a unique spawn corner
+  // keyed off their seat index so boats don't stack on top of each
+  // other at the start of the round.
+  if (_mp && _mp.mySeatIdx >= 0 && typeof SPAWN_CORNERS !== 'undefined' && SPAWN_CORNERS.length) {
+    const corner = SPAWN_CORNERS[_mp.mySeatIdx % SPAWN_CORNERS.length];
+    localPlayer.x = corner.x;
+    localPlayer.z = corner.z;
+    localPlayer.rotation = Math.atan2(-corner.x, -corner.z); // face the island
+  }
   document.getElementById('start-screen').hidden = true;
   document.getElementById('game-screen').hidden  = false;
   const poll = () => {

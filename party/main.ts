@@ -60,7 +60,7 @@ const QUICK_START_MS   = 30_000; // 30s grace after all humans ready
 const COUNTDOWN_MS     = 3_000;
 const PLAYING_MS       = 180_000; // 3 minutes
 const RECAP_MS         = 15_000;
-const TICK_MS          = 100;     // state tick — drives ghost-reaper + position fan-out during PLAYING
+const TICK_MS          = 50;      // 20 Hz — faster position fan-out during PLAYING
 const MIN_HUMANS_TO_START = 2;    // solo lobby never advances: use "Play offline" on the client
 
 const COLORS    = ["#ff5a3c", "#ffd93d", "#4ade80", "#22d3ee"];
