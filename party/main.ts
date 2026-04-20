@@ -114,23 +114,20 @@ export default class TrashureRoom implements Party.Server {
       }
     }
 
-    // Only seat new players during LOBBY. If a round is mid-flight
-    // (COUNTDOWN, PLAYING, RECAP), the connection stays in the room
-    // receiving state snapshots but holds no seat until the next LOBBY.
-    if (this.state.phase !== "LOBBY") {
-      conn.send(JSON.stringify({ type: "spectator" }));
-      conn.send(JSON.stringify({ type: "state", state: this.state }));
-      this.startTicker();
-      return;
-    }
+    // Mid-round joining is allowed: the player takes over a bot seat
+    // and inherits whatever the bot had (position, score — once those
+    // move server-side in a later milestone). True spectator is only
+    // used when all 4 seats are already human.
     const idx = this.state.seats.findIndex((s) => s.kind === "bot" || s.kind === "empty");
     if (idx === -1) {
-      // All 4 seats are human — also a spectator.
       conn.send(JSON.stringify({ type: "spectator" }));
       conn.send(JSON.stringify({ type: "state", state: this.state }));
       return;
     }
-    const color = COLORS[idx % COLORS.length];
+    const prev = this.state.seats[idx];
+    // If we're taking over a bot, keep its color so the leaderboard
+    // layout doesn't shuffle mid-round.
+    const color = prev.kind === "bot" ? prev.color : COLORS[idx % COLORS.length];
     this.state.seats[idx] = { kind: "human", id: conn.id, pid, name: "Capitaine", ready: false, color };
     this.startTicker();
     this.broadcastState();

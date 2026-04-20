@@ -13142,35 +13142,34 @@ function _mpSend(obj) {
 function _mpShowHint(text) { if (_mp.wrHint) _mp.wrHint.textContent = text; }
 
 function _mpApplyState(state) {
-  const prevPhase = _mp.phase;
-  const firstSnapshot = !_mp.everAppliedState;
-  _mp.everAppliedState = true;
   _mp.phase = state.phase;
   _mp.phaseEndsAt = state.phaseEndsAt;
   _mp.seats = Array.isArray(state.seats) ? state.seats : [];
   _mpRenderSeats();
   _mpRenderPhase();
-  // Only launch the local round on a real transition INTO PLAYING
-  // from COUNTDOWN. If we connected while the server was already in
-  // PLAYING (a round started before we arrived), we sit in the lobby
-  // as a late-joiner and wait for the next LOBBY → COUNTDOWN cycle.
-  const transitioningToPlay = prevPhase === 'COUNTDOWN' && state.phase === 'PLAYING';
-  if (transitioningToPlay && !_mp.roundLaunched && !_mp.isSpectator) {
+  // Launch the local round when the server is in PLAYING and we have
+  // a human seat. This handles both the clean path (we were in the
+  // lobby, countdown fired, now PLAYING) and the mid-round join path
+  // (we connected while a round was in flight and took over a bot's
+  // seat — we should immediately jump in and play the remainder).
+  const hasSeat = state.seats && state.seats.some(
+    (s) => s && s.kind === 'human' && s.id && _mp.ws && s.id === _mpOwnConnId()
+  );
+  if (state.phase === 'PLAYING' && !_mp.roundLaunched && !_mp.isSpectator) {
     _mp.roundLaunched = true;
     _mpHideWaitingRoom();
     _beginLocalRound();
   }
-  // First snapshot after connect: if server is mid-round, tell the
-  // player they're waiting for the next round.
-  if (firstSnapshot && (state.phase === 'PLAYING' || state.phase === 'COUNTDOWN' || state.phase === 'RECAP')) {
-    _mp.waitingForNextRound = true;
-  }
   if (state.phase === 'LOBBY') {
-    // Fresh round cycle begins — re-arm the launcher.
+    // Fresh round cycle — re-arm the launcher.
     _mp.roundLaunched = false;
-    _mp.waitingForNextRound = false;
   }
 }
+// We don't get the server-assigned id directly, so just trust the
+// state: any 'human' seat in the snapshot belongs to SOME connected
+// client. For the mid-round auto-launch we only need to know "is
+// the local player currently seated?" — spectator flag answers that.
+function _mpOwnConnId() { return null; }
 function _mpRenderSeats() {
   if (!_mp.wrSeats) return;
   const html = _mp.seats.map((seat) => {
