@@ -13142,22 +13142,33 @@ function _mpSend(obj) {
 function _mpShowHint(text) { if (_mp.wrHint) _mp.wrHint.textContent = text; }
 
 function _mpApplyState(state) {
+  const prevPhase = _mp.phase;
+  const firstSnapshot = !_mp.everAppliedState;
+  _mp.everAppliedState = true;
   _mp.phase = state.phase;
   _mp.phaseEndsAt = state.phaseEndsAt;
   _mp.seats = Array.isArray(state.seats) ? state.seats : [];
   _mpRenderSeats();
   _mpRenderPhase();
-  if (state.phase === 'PLAYING' && !_mp.roundLaunched && !_mp.isSpectator) {
+  // Only launch the local round on a real transition INTO PLAYING
+  // from COUNTDOWN. If we connected while the server was already in
+  // PLAYING (a round started before we arrived), we sit in the lobby
+  // as a late-joiner and wait for the next LOBBY → COUNTDOWN cycle.
+  const transitioningToPlay = prevPhase === 'COUNTDOWN' && state.phase === 'PLAYING';
+  if (transitioningToPlay && !_mp.roundLaunched && !_mp.isSpectator) {
     _mp.roundLaunched = true;
     _mpHideWaitingRoom();
     _beginLocalRound();
   }
-  if (state.phase === 'LOBBY' || state.phase === 'COUNTDOWN' || state.phase === 'RECAP') {
-    // A new round cycle — if a previous round ran, reset the flag so the
-    // next PLAYING transition relaunches. Gameplay reset for successive
-    // rounds ships in a later milestone; for now a first-round game just
-    // plays out locally.
-    if (state.phase === 'LOBBY') _mp.roundLaunched = false;
+  // First snapshot after connect: if server is mid-round, tell the
+  // player they're waiting for the next round.
+  if (firstSnapshot && (state.phase === 'PLAYING' || state.phase === 'COUNTDOWN' || state.phase === 'RECAP')) {
+    _mp.waitingForNextRound = true;
+  }
+  if (state.phase === 'LOBBY') {
+    // Fresh round cycle begins — re-arm the launcher.
+    _mp.roundLaunched = false;
+    _mp.waitingForNextRound = false;
   }
 }
 function _mpRenderSeats() {

@@ -114,9 +114,18 @@ export default class TrashureRoom implements Party.Server {
       }
     }
 
+    // Only seat new players during LOBBY. If a round is mid-flight
+    // (COUNTDOWN, PLAYING, RECAP), the connection stays in the room
+    // receiving state snapshots but holds no seat until the next LOBBY.
+    if (this.state.phase !== "LOBBY") {
+      conn.send(JSON.stringify({ type: "spectator" }));
+      conn.send(JSON.stringify({ type: "state", state: this.state }));
+      this.startTicker();
+      return;
+    }
     const idx = this.state.seats.findIndex((s) => s.kind === "bot" || s.kind === "empty");
     if (idx === -1) {
-      // All 4 seats are human — send them in as a spectator.
+      // All 4 seats are human — also a spectator.
       conn.send(JSON.stringify({ type: "spectator" }));
       conn.send(JSON.stringify({ type: "state", state: this.state }));
       return;
@@ -209,6 +218,14 @@ export default class TrashureRoom implements Party.Server {
         this.state.phaseEndsAt = 0;
       }
       this.broadcastState();
+    }
+    // If every human has vanished, reset to a fresh lobby so the next
+    // player to arrive doesn't inherit a stale COUNTDOWN/PLAYING/RECAP.
+    if (humanCount(this.state) === 0 && this.state.phase !== "LOBBY") {
+      this.state = initialState();
+      this.broadcastState();
+      this.stopTicker();
+      return;
     }
     // LOBBY never auto-advances on a clock. The only trigger is "all
     // humans ready" (and there must be >= MIN_HUMANS_TO_START), which
