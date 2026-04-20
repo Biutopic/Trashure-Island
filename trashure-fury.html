@@ -1001,6 +1001,89 @@
       100% { transform: scale(0.8); opacity: 0; }
     }
 
+    /* ---- WAITING ROOM (multiplayer lobby / countdown / recap wait) ---- */
+    #waiting-room {
+      position: fixed; inset: 0; z-index: 180;
+      display: none;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 18px; padding: 28px;
+      background:
+        radial-gradient(ellipse at 50% 30%, rgba(0,40,80,0.6) 0%, rgba(5,10,20,0.96) 70%);
+      color: #d7ecf7; font-family: var(--font-body);
+      backdrop-filter: blur(4px);
+    }
+    #waiting-room.active { display: flex; }
+    #waiting-room .wr-eyebrow {
+      font-family: var(--font-heading);
+      font-size: 0.7rem; letter-spacing: 0.3em; text-transform: uppercase;
+      color: rgba(120, 200, 240, 0.85);
+    }
+    #waiting-room .wr-title {
+      font-family: var(--font-heading); font-size: 1.8rem; font-weight: 900;
+      letter-spacing: 0.08em; color: #fff;
+      text-shadow: 0 0 18px rgba(0, 220, 200, 0.3);
+    }
+    #waiting-room .wr-timer {
+      font-family: var(--font-heading); font-size: 2.6rem; font-weight: 900;
+      color: #00e6b8; letter-spacing: 0.06em;
+      text-shadow: 0 0 20px rgba(0, 220, 200, 0.45);
+      font-variant-numeric: tabular-nums;
+    }
+    #waiting-room .wr-seats {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 12px; margin: 18px 0 6px;
+      width: min(800px, 95vw);
+    }
+    .wr-seat {
+      padding: 14px 12px;
+      border: 1px solid rgba(0, 200, 220, 0.25);
+      border-radius: 10px;
+      background: rgba(0, 20, 36, 0.65);
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      min-height: 110px; transition: border-color 0.2s, background 0.2s;
+    }
+    .wr-seat.human { border-color: rgba(0, 230, 184, 0.55); background: rgba(6, 32, 44, 0.85); }
+    .wr-seat.human.ready { border-color: #00e6b8; box-shadow: 0 0 18px rgba(0, 230, 184, 0.35); }
+    .wr-seat.bot   { opacity: 0.72; }
+    .wr-seat-ico { font-size: 1.4rem; }
+    .wr-seat-name { font-weight: 700; letter-spacing: 0.04em; color: #eaf6fc; }
+    .wr-seat-role {
+      font-family: var(--font-heading); font-size: 0.6rem; letter-spacing: 0.2em;
+      text-transform: uppercase; color: rgba(180, 210, 230, 0.7);
+    }
+    .wr-seat.human .wr-seat-role { color: rgba(120, 230, 200, 0.95); }
+    .wr-seat-color-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: currentColor; box-shadow: 0 0 6px currentColor;
+    }
+    #waiting-room .wr-actions {
+      display: flex; gap: 14px; margin-top: 8px;
+    }
+    #wr-ready-btn {
+      padding: 12px 32px;
+      font-family: var(--font-heading); font-weight: 800; font-size: 0.95rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: #031018; background: linear-gradient(135deg, #00e6b8, #22d3ee);
+      border: none; border-radius: 8px; cursor: pointer;
+      box-shadow: 0 4px 18px rgba(0, 220, 200, 0.35);
+      transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+    }
+    #wr-ready-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0, 220, 200, 0.5); }
+    #wr-ready-btn.on { filter: hue-rotate(15deg) brightness(1.05); }
+    #wr-leave-btn {
+      padding: 12px 22px;
+      font-family: var(--font-heading); font-weight: 700; font-size: 0.85rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(220, 235, 245, 0.85);
+      background: transparent;
+      border: 1px solid rgba(180, 210, 230, 0.4);
+      border-radius: 8px; cursor: pointer;
+    }
+    #waiting-room .wr-hint {
+      font-size: 0.78rem; color: rgba(180, 210, 230, 0.7);
+      max-width: 520px; text-align: center;
+    }
+
     #gameover-overlay {
       position: fixed; inset: 0; z-index: 200;
       flex-direction: column; align-items: center; justify-content: center;
@@ -1817,6 +1900,19 @@
 
   <!-- Labels container (3D projected labels) -->
   <div id="labels-container"></div>
+</div>
+
+<!-- Multiplayer waiting room -->
+<div id="waiting-room" aria-hidden="true">
+  <div class="wr-eyebrow" data-i18n="wr_eyebrow">Trashure Island &middot; Multijoueur</div>
+  <div class="wr-title" id="wr-title" data-i18n="wr_lobby_title">Salle d'attente</div>
+  <div class="wr-timer" id="wr-timer">0:30</div>
+  <div class="wr-seats" id="wr-seats"></div>
+  <div class="wr-actions">
+    <button id="wr-ready-btn" data-i18n="wr_ready_btn">PRÊT</button>
+    <button id="wr-leave-btn" data-i18n="wr_leave_btn">Quitter</button>
+  </div>
+  <div class="wr-hint" id="wr-hint" data-i18n="wr_hint">Les sièges vides sont remplis par des bots. Dès que tous les joueurs sont prêts, la manche démarre.</div>
 </div>
 
 <!-- Game over overlay (outside game-screen so z-index works reliably) -->
@@ -12915,13 +13011,230 @@ function gameLoop(timestamp) {
 const startBtn  = document.getElementById('start-btn');
 const nameInput = document.getElementById('name-input');
 
-function beginGame() {
+// ============================================================
+// MULTIPLAYER: PartyKit client + waiting-room orchestration
+// ============================================================
+// Milestone 1 + 1.5: a room-wide state machine runs on the server
+// (LOBBY → COUNTDOWN → PLAYING → RECAP). The client joins the lobby
+// on "LARGUER LES AMARRES", shows the waiting-room UI, and only
+// kicks off the local gameplay loop when the server says PLAYING.
+// Gameplay itself is still local in this milestone — next milestones
+// will move world state to the server.
+//
+// The URL below points to the user's PartyKit deployment. Override
+// with `?mp=wss://...` in the page URL for local dev.
+const MP_DEFAULT_HOST = 'trashure-island.biutopic.partykit.dev';
+const MP_ROOM_ID      = 'global';
+
+const _mp = {
+  ws: null,
+  phase: 'LOBBY',
+  phaseEndsAt: 0,
+  seats: [],
+  isSpectator: false,
+  selfReady: false,
+  roundLaunched: false,
+  wrEl:    null,
+  wrTitle: null,
+  wrTimer: null,
+  wrSeats: null,
+  wrHint:  null,
+  wrReady: null,
+  reconnectTimer: null,
+};
+
+function _mpResolveUrl() {
+  try {
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('mp')) return qs.get('mp');
+  } catch (e) {}
+  const host = MP_DEFAULT_HOST;
+  return 'wss://' + host + '/parties/main/' + encodeURIComponent(MP_ROOM_ID);
+}
+
+function _mpGrabEls() {
+  _mp.wrEl    = document.getElementById('waiting-room');
+  _mp.wrTitle = document.getElementById('wr-title');
+  _mp.wrTimer = document.getElementById('wr-timer');
+  _mp.wrSeats = document.getElementById('wr-seats');
+  _mp.wrHint  = document.getElementById('wr-hint');
+  _mp.wrReady = document.getElementById('wr-ready-btn');
+}
+
+function _mpConnect() {
+  _mpGrabEls();
+  if (!_mp.wrEl) return;
+  _mp.wrEl.classList.add('active');
+  _mp.wrEl.setAttribute('aria-hidden', 'false');
+  _mpShowHint(tr('wr_connecting'));
+  try {
+    _mp.ws = new WebSocket(_mpResolveUrl());
+  } catch (e) {
+    _mpShowHint(tr('wr_disconnected'));
+    _mpScheduleReconnect();
+    return;
+  }
+  _mp.ws.addEventListener('open', () => {
+    const n = (nameInput && nameInput.value || '').trim() || 'Capitaine';
+    _mp.ws.send(JSON.stringify({ type: 'hello', name: n }));
+  });
+  _mp.ws.addEventListener('message', (ev) => {
+    let data;
+    try { data = JSON.parse(ev.data); } catch { return; }
+    if (data.type === 'spectator') {
+      _mp.isSpectator = true;
+      return;
+    }
+    if (data.type === 'state' && data.state) {
+      _mpApplyState(data.state);
+    }
+  });
+  _mp.ws.addEventListener('close', () => {
+    _mpShowHint(tr('wr_disconnected'));
+    _mpScheduleReconnect();
+  });
+  _mp.ws.addEventListener('error', () => {/* close handler will run */});
+}
+function _mpScheduleReconnect() {
+  if (_mp.reconnectTimer) return;
+  _mp.reconnectTimer = setTimeout(() => {
+    _mp.reconnectTimer = null;
+    _mpConnect();
+  }, 2500);
+}
+function _mpSend(obj) {
+  if (_mp.ws && _mp.ws.readyState === WebSocket.OPEN) {
+    _mp.ws.send(JSON.stringify(obj));
+  }
+}
+function _mpShowHint(text) { if (_mp.wrHint) _mp.wrHint.textContent = text; }
+
+function _mpApplyState(state) {
+  _mp.phase = state.phase;
+  _mp.phaseEndsAt = state.phaseEndsAt;
+  _mp.seats = Array.isArray(state.seats) ? state.seats : [];
+  _mpRenderSeats();
+  _mpRenderPhase();
+  if (state.phase === 'PLAYING' && !_mp.roundLaunched && !_mp.isSpectator) {
+    _mp.roundLaunched = true;
+    _mpHideWaitingRoom();
+    _beginLocalRound();
+  }
+  if (state.phase === 'LOBBY' || state.phase === 'COUNTDOWN' || state.phase === 'RECAP') {
+    // A new round cycle — if a previous round ran, reset the flag so the
+    // next PLAYING transition relaunches. Gameplay reset for successive
+    // rounds ships in a later milestone; for now a first-round game just
+    // plays out locally.
+    if (state.phase === 'LOBBY') _mp.roundLaunched = false;
+  }
+}
+function _mpRenderSeats() {
+  if (!_mp.wrSeats) return;
+  const html = _mp.seats.map((seat) => {
+    if (!seat || seat.kind === 'empty') {
+      return '<div class="wr-seat bot"><div class="wr-seat-ico">\u2014</div>' +
+             '<div class="wr-seat-name">\u2014</div>' +
+             '<div class="wr-seat-role">' + tr('wr_seat_bot') + '</div></div>';
+    }
+    if (seat.kind === 'human') {
+      const ready = seat.ready ? ' ready' : '';
+      const readyBadge = seat.ready
+        ? '<div class="wr-seat-role" style="color:#00e6b8">' + tr('wr_seat_ready') + '</div>'
+        : '<div class="wr-seat-role">' + tr('wr_seat_human') + '</div>';
+      return '<div class="wr-seat human' + ready + '">' +
+             '<div class="wr-seat-ico">\uD83E\uDDD1\u200D\u2708\uFE0F</div>' +
+             '<div class="wr-seat-name">' + _mpEscape(seat.name) + '</div>' +
+             readyBadge +
+             '<div class="wr-seat-color-dot" style="color:' + (seat.color || '#fff') + '"></div>' +
+             '</div>';
+    }
+    // bot
+    return '<div class="wr-seat bot">' +
+           '<div class="wr-seat-ico">\uD83E\uDD16</div>' +
+           '<div class="wr-seat-name">' + _mpEscape(seat.name) + '</div>' +
+           '<div class="wr-seat-role">' + tr('wr_seat_bot') + '</div>' +
+           '<div class="wr-seat-color-dot" style="color:' + (seat.color || '#888') + '"></div>' +
+           '</div>';
+  }).join('');
+  _mp.wrSeats.innerHTML = html;
+}
+function _mpEscape(s) {
+  return String(s || '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// Countdown ticker — re-reads phaseEndsAt each frame so the visible
+// number matches the server even across reconnects.
+function _mpStartTickingTimer() {
+  const tick = () => {
+    if (!_mp.wrEl || !_mp.wrEl.classList.contains('active')) {
+      return requestAnimationFrame(tick);
+    }
+    if (_mp.wrTimer) {
+      const left = Math.max(0, Math.round((_mp.phaseEndsAt - Date.now()) / 1000));
+      const mm = Math.floor(left / 60);
+      const ss = left % 60;
+      _mp.wrTimer.textContent = mm + ':' + String(ss).padStart(2, '0');
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function _mpRenderPhase() {
+  if (!_mp.wrEl) return;
+  switch (_mp.phase) {
+    case 'LOBBY':
+      _mp.wrTitle.textContent = tr('wr_lobby_title');
+      _mpShowHint(tr('wr_hint'));
+      if (_mp.wrReady) _mp.wrReady.style.display = _mp.isSpectator ? 'none' : '';
+      break;
+    case 'COUNTDOWN':
+      _mp.wrTitle.textContent = tr('wr_countdown_title');
+      _mpShowHint(tr('wr_hint'));
+      if (_mp.wrReady) _mp.wrReady.style.display = 'none';
+      break;
+    case 'PLAYING':
+      // Only shown if we're spectating or waiting for next round.
+      _mp.wrTitle.textContent = _mp.isSpectator ? tr('wr_spectator_title') : tr('wr_lobby_title');
+      _mpShowHint(tr('wr_hint_playing'));
+      if (_mp.wrReady) _mp.wrReady.style.display = 'none';
+      break;
+    case 'RECAP':
+      _mp.wrTitle.textContent = tr('wr_recap_title');
+      _mpShowHint(tr('wr_hint_recap'));
+      if (_mp.wrReady) _mp.wrReady.style.display = 'none';
+      break;
+  }
+}
+function _mpHideWaitingRoom() {
+  if (_mp.wrEl) {
+    _mp.wrEl.classList.remove('active');
+    _mp.wrEl.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function _mpToggleReady() {
+  if (_mp.phase !== 'LOBBY' || _mp.isSpectator) return;
+  _mp.selfReady = !_mp.selfReady;
+  _mp.wrReady.classList.toggle('on', _mp.selfReady);
+  _mp.wrReady.textContent = _mp.selfReady ? tr('wr_unready_btn') : tr('wr_ready_btn');
+  _mpSend({ type: 'ready', value: _mp.selfReady });
+}
+function _mpLeave() {
+  try { if (_mp.ws) _mp.ws.close(); } catch (e) {}
+  _mpHideWaitingRoom();
+  const ss = document.getElementById('start-screen');
+  if (ss) { ss.hidden = false; ss.style.display = 'flex'; }
+}
+
+// The original local-only startup path. We keep it as-is and wrap it
+// in beginGame() which routes through the lobby first.
+function _beginLocalRound() {
   localPlayer.name = nameInput.value.trim() || 'Capitaine';
   document.getElementById('start-screen').hidden = true;
   document.getElementById('game-screen').hidden  = false;
-  // Music disabled for now — stopMenuMusic/startThemeMusic calls removed.
-
-  // Wait for GLTF models (or fallback flags)
   const poll = () => {
     if (modelsReady.boat && modelsReady.fisher && modelsReady.pirate && modelsReady.bomb) {
       initGame();
@@ -12929,10 +13242,6 @@ function beginGame() {
       startOceanAmbient();
       startThemeMusic();
       startMotorLoop();
-      // Kick off the countdown fade — short: cover the very first awkward
-      // frame where camera is still at world origin, then fade out fast
-      // (0.6s) so the crab animations are visible through most of the
-      // countdown. Total hidden time ≈ 350ms.
       setTimeout(() => {
         const fade = document.getElementById('countdown-fade');
         if (fade) fade.classList.add('done');
@@ -12943,6 +13252,28 @@ function beginGame() {
     }
   };
   poll();
+}
+
+function beginGame() {
+  // Hide the start panel and enter the multiplayer waiting room.
+  // The local round is launched when the server reports PLAYING.
+  const ss = document.getElementById('start-screen');
+  if (ss) ss.hidden = true;
+  _mp.roundLaunched = false;
+  _mp.selfReady = false;
+  _mpConnect();
+  _mpStartTickingTimer();
+  // Wire ready/leave once.
+  _mpGrabEls();
+  if (_mp.wrReady && !_mp.wrReady._bound) {
+    _mp.wrReady.addEventListener('click', _mpToggleReady);
+    _mp.wrReady._bound = true;
+  }
+  const leaveBtn = document.getElementById('wr-leave-btn');
+  if (leaveBtn && !leaveBtn._bound) {
+    leaveBtn.addEventListener('click', _mpLeave);
+    leaveBtn._bound = true;
+  }
 }
 
 startBtn.addEventListener('click', beginGame);
@@ -13717,6 +14048,23 @@ const I18N_STRINGS = {
     hydro_mode_coast: 'longeage du littoral',
     hydro_mode_fast: 'navigation rapide',
     hydro_mode_explore: 'exploration',
+    // Waiting room
+    wr_eyebrow: 'Trashure Island \u00B7 Multijoueur',
+    wr_lobby_title: 'Salle d\u2019attente',
+    wr_countdown_title: 'D\u00E9part dans...',
+    wr_recap_title: 'Fin de manche',
+    wr_spectator_title: 'Spectateur',
+    wr_ready_btn: 'PR\u00CAT',
+    wr_unready_btn: 'PAS PR\u00CAT',
+    wr_leave_btn: 'Quitter',
+    wr_hint: 'Les si\u00E8ges vides sont remplis par des bots. D\u00E8s que tous les joueurs sont pr\u00EAts, la manche d\u00E9marre.',
+    wr_hint_playing: 'Une manche est en cours. Tu joueras \u00E0 la prochaine.',
+    wr_hint_recap: 'R\u00E9cap de la manche en cours. Prochaine manche dans un instant.',
+    wr_seat_human: 'Humain',
+    wr_seat_bot: 'Bot',
+    wr_seat_ready: 'PR\u00CAT',
+    wr_connecting: 'Connexion au serveur...',
+    wr_disconnected: 'D\u00E9connect\u00E9. Tentative de reconnexion...',
   },
   en: {
     subtitle: 'a game that trains an obstacle-avoidance model',
@@ -13814,6 +14162,23 @@ const I18N_STRINGS = {
     hydro_mode_coast: 'coastal hug',
     hydro_mode_fast: 'fast navigation',
     hydro_mode_explore: 'exploration',
+    // Waiting room
+    wr_eyebrow: 'Trashure Island \u00B7 Multiplayer',
+    wr_lobby_title: 'Waiting room',
+    wr_countdown_title: 'Starting in...',
+    wr_recap_title: 'Round over',
+    wr_spectator_title: 'Spectator',
+    wr_ready_btn: 'READY',
+    wr_unready_btn: 'NOT READY',
+    wr_leave_btn: 'Leave',
+    wr_hint: 'Empty seats are filled by bots. As soon as all players are ready, the round starts.',
+    wr_hint_playing: 'A round is in progress. You\u2019ll join the next one.',
+    wr_hint_recap: 'Round recap in progress. Next round starts shortly.',
+    wr_seat_human: 'Human',
+    wr_seat_bot: 'Bot',
+    wr_seat_ready: 'READY',
+    wr_connecting: 'Connecting to server...',
+    wr_disconnected: 'Disconnected. Reconnecting...',
   },
 };
 let _currentLang = (typeof localStorage !== 'undefined' && localStorage.getItem('tf_lang')) || 'fr';

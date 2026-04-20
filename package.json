@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "party:dev": "npx partykit@latest dev",
+    "party:deploy": "npx partykit@latest deploy",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
