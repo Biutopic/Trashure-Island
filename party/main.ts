@@ -23,8 +23,10 @@ type Seat =
 
 // If we haven't heard from a human seat in this long, treat it as a
 // ghost (browser crash, stuck connection, no close frame) and flip
-// it back to a bot so the round state stays honest.
-const GHOST_TIMEOUT_MS = 6_000;
+// it back to a bot so the round state stays honest. Longer than the
+// client's 3s ping cadence so backgrounded tabs (whose pings go via
+// a Web Worker to escape throttling) survive a transient hiccup.
+const GHOST_TIMEOUT_MS = 15_000;
 
 interface RoomState {
   phase: Phase;

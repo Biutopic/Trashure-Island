@@ -13057,8 +13057,39 @@ const _mp = {
   wrHint:  null,
   wrReady: null,
   reconnectTimer: null,
-  pingTimer: null,
+  pingWorker: null,
 };
+// Background tabs throttle setInterval to ~1 Hz (or worse) in modern
+// browsers, which would starve our heartbeat and make the other player
+// see us turn into a bot the moment we switch windows. A tiny Web
+// Worker runs its own interval at full speed regardless of tab focus
+// and pokes the main thread to send the ping. Inline Blob so no extra
+// file is needed.
+function _mpStartHeartbeat() {
+  if (_mp.pingWorker) _mp.pingWorker.terminate();
+  try {
+    const code = 'setInterval(function(){ self.postMessage(0); }, 3000);';
+    const blob = new Blob([code], { type: 'application/javascript' });
+    _mp.pingWorker = new Worker(URL.createObjectURL(blob));
+    _mp.pingWorker.onmessage = () => {
+      if (_mp.ws && _mp.ws.readyState === WebSocket.OPEN) {
+        try { _mp.ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {}
+      }
+    };
+  } catch (e) {
+    // Worker unavailable — fall back to a plain interval (will be
+    // throttled in background tabs but better than nothing).
+    const fallback = setInterval(() => {
+      if (_mp.ws && _mp.ws.readyState === WebSocket.OPEN) {
+        try { _mp.ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {}
+      }
+    }, 3000);
+    _mp.pingWorker = { terminate() { clearInterval(fallback); } };
+  }
+}
+function _mpStopHeartbeat() {
+  if (_mp.pingWorker) { try { _mp.pingWorker.terminate(); } catch (e) {} _mp.pingWorker = null; }
+}
 
 // Per-tab persistent ID. sessionStorage scopes it to one tab, so two
 // tabs on the same machine intentionally get two different seats, but
@@ -13110,14 +13141,7 @@ function _mpConnect() {
   _mp.ws.addEventListener('open', () => {
     const n = (nameInput && nameInput.value || '').trim() || 'Capitaine';
     _mp.ws.send(JSON.stringify({ type: 'hello', name: n }));
-    // Heartbeat: server reaps seats that go silent for >6s, so keep a
-    // 3s cadence to survive occasional missed frames.
-    if (_mp.pingTimer) clearInterval(_mp.pingTimer);
-    _mp.pingTimer = setInterval(() => {
-      if (_mp.ws && _mp.ws.readyState === WebSocket.OPEN) {
-        try { _mp.ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {}
-      }
-    }, 3000);
+    _mpStartHeartbeat();
   });
   _mp.ws.addEventListener('message', (ev) => {
     let data;
@@ -13131,7 +13155,7 @@ function _mpConnect() {
     }
   });
   _mp.ws.addEventListener('close', () => {
-    if (_mp.pingTimer) { clearInterval(_mp.pingTimer); _mp.pingTimer = null; }
+    _mpStopHeartbeat();
     _mpShowHint(tr('wr_disconnected'));
     _mpScheduleReconnect();
   });
