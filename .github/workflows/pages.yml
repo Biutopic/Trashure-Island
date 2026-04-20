@@ -1,0 +1,59 @@
+name: Deploy Trashure Island to GitHub Pages
+
+# Builds a tiny static bundle from the repo (trashure-fury.html + public/
+# assets) and publishes it to GitHub Pages. The game is self-contained —
+# it loads Three.js via an inline importmap from a CDN, so no npm build
+# step is required.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assemble _site/
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          # The game page becomes the site root so biutopic.github.io/<repo>/
+          # loads straight into the game.
+          cp trashure-fury.html _site/index.html
+          # Also keep the original name so direct links keep working.
+          cp trashure-fury.html _site/trashure-fury.html
+          # Copy the assets directory as-is. The game references them as
+          # ./public/assets/... so we preserve that layout.
+          mkdir -p _site/public
+          cp -r public/assets _site/public/assets
+          # Optional: favicon + robots if they exist
+          [ -f public/favicon.ico ] && cp public/favicon.ico _site/favicon.ico || true
+          [ -f public/robots.txt ]   && cp public/robots.txt   _site/robots.txt   || true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
