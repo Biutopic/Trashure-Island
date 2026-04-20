@@ -9117,6 +9117,7 @@ function _typewriteTip(html) {
     if (typeof bots !== 'undefined' && bots) {
       for (const b of bots) {
         if (!b || b.health <= 0) continue;
+        if (b.mpSuppressed) continue; // hidden MP seats don't show on radar
         if (b.isWhale)      drawEcho(b.x, b.z, 4.5, '120, 180, 255', true);
         else if (b.isHydro) drawEcho(b.x, b.z, 3.2, '0, 255, 210', false);
         else                drawEcho(b.x, b.z, 2.6, '255, 210, 80', false);
@@ -12172,25 +12173,33 @@ function gameLoop(timestamp) {
 
   // ---- BOTS ----
   for (const bot of bots) {
-    // Unused rival-bot slot during an online round → hide and skip.
+    // Unused rival-bot slot during an online round → hide the mesh,
+    // freeze in place, keep invulnerable, skip all logic. Do NOT zero
+    // health — the death path drops cargo + modules, flooding the
+    // ocean with pickups. Do NOT move the bot to (0,0) either — that
+    // put them in the middle of the island and garbage/particle
+    // systems reacted to the cluster. Leaving them at their original
+    // spawn corner with invulnerability is the cleanest no-op.
     if (_mpHiddenBotIds.has(bot.id)) {
+      bot.mpSuppressed = true;
+      bot.vx = 0; bot.vz = 0;
+      bot.health = bot.maxHealth || MAX_HEALTH || 100;
+      bot.lastHitTime = gameTime + 999;
+      bot.totalCollected = 0; bot.plasticCount = 0;
       const mesh = botMeshes.get(bot.id);
       if (mesh && mesh.visible !== false) mesh.visible = false;
-      bot.health = 0; // keep internal systems from picking up this slot
       continue;
     }
+    bot.mpSuppressed = false;
     // Re-show previously hidden slots if we ever leave MP (e.g. next round offline).
     if (!_mpActive) {
       const mesh = botMeshes.get(bot.id);
       if (mesh && mesh.visible === false) mesh.visible = true;
     }
     const _mpRemote = _mpRemoteByBotId.get(bot.id);
-    // If we're now driving this slot from the server, make sure the mesh
-    // is visible (it may have been hidden last frame when no human occupied it).
     if (_mpRemote) {
       const mesh = botMeshes.get(bot.id);
       if (mesh && mesh.visible === false) mesh.visible = true;
-      if (bot.health <= 0) bot.health = (bot.maxHealth || MAX_HEALTH || 100);
     }
     if (_mpRemote) {
       // Snapshot interpolation: find where this boat should be right
