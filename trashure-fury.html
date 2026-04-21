@@ -12304,9 +12304,9 @@ function gameLoop(timestamp) {
       bot.isBoosting = !!_mpRemote.boosting;
       // Server-authoritative health + score show up on the player
       // label + the leaderboard.
+      bot.maxHealth = MAX_HEALTH;
       if (typeof _mpRemote.health === 'number') {
-        bot.health = _mpRemote.health;
-        bot.maxHealth = bot.maxHealth || MAX_HEALTH || 100;
+        bot.health = Math.max(0, Math.min(MAX_HEALTH, _mpRemote.health));
       }
       if (typeof _mpRemote.score === 'number') {
         bot.totalCollected = _mpRemote.score;
@@ -13631,23 +13631,17 @@ function _mpTrySendHit(victim, dmg, source) {
   if (!_mp.remoteBoats || _mp.remoteBoats.length === 0) return false;
   // victim may be the localPlayer (e.g. pirate hits me) — those never route.
   if (!victim.id || victim.id === 'local') return false;
-  // Find which seat this bot represents, if any.
-  for (const rb of _mp.remoteBoats) {
-    // The local rival-bot slot whose index matches rb.seatIdx is the
-    // one driven by this remote human. Compare by bot id via the
-    // same mapping the game loop uses.
-    if (_mp._remoteByBotId && _mp._remoteByBotId.get(victim.id) === rb) {
-      try {
-        _mp.ws.send(JSON.stringify({
-          type: 'hit', target: rb.seatIdx,
-          dmg: Math.max(0, Math.round(dmg)),
-          source: String(source || 'unknown').slice(0, 16),
-        }));
-      } catch (e) {}
-      return true;
-    }
-  }
-  return false;
+  if (!_mp._remoteByBotId) return false;
+  const rb = _mp._remoteByBotId.get(victim.id);
+  if (!rb) return false;
+  try {
+    _mp.ws.send(JSON.stringify({
+      type: 'hit', target: rb.seatIdx,
+      dmg: Math.max(0, Math.round(dmg)),
+      source: String(source || 'unknown').slice(0, 16),
+    }));
+  } catch (e) {}
+  return true;
 }
 
 function _mpApplyState(state) {
