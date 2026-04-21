@@ -65,7 +65,7 @@ interface RoomState {
 // LOBBY has no auto-timeout: rounds only start when every human clicks
 // READY. The server sets phaseEndsAt to a "quick start" value once the
 // last human readies up, used only for the ~1.5 s settle before the 3-2-1.
-const QUICK_START_MS   = 30_000; // 30s grace after all humans ready
+const QUICK_START_MS   = 10_000; // 10s grace after all humans ready
 const COUNTDOWN_MS     = 3_000;
 const PLAYING_MS       = 180_000; // 3 minutes
 const RECAP_MS         = 15_000;
