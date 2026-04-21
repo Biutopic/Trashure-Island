@@ -1,0 +1,46 @@
+name: Deploy PartyKit server
+
+# Auto-deploys party/main.ts to PartyKit whenever the server code,
+# manifest, or this workflow changes. The first deploy still has to
+# be done locally to establish the partykit.dev subdomain — after
+# that, this handles every subsequent push.
+#
+# Setup (one-time, in GitHub repo Settings -> Secrets -> Actions):
+#   PARTYKIT_LOGIN = your PartyKit username (e.g. "basiloco")
+#   PARTYKIT_TOKEN = the access_token from ~/.partykit/config.json
+# See the bottom of party/README.md for how to grab these.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "party/**"
+      - "partykit.json"
+      - ".github/workflows/deploy-party.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: partykit-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Deploy to PartyKit
+        env:
+          PARTYKIT_LOGIN: ${{ secrets.PARTYKIT_LOGIN }}
+          PARTYKIT_TOKEN: ${{ secrets.PARTYKIT_TOKEN }}
+        run: |
+          if [ -z "$PARTYKIT_LOGIN" ] || [ -z "$PARTYKIT_TOKEN" ]; then
+            echo "::error::PARTYKIT_LOGIN and PARTYKIT_TOKEN must be set as repo secrets."
+            exit 1
+          fi
+          npx --yes partykit@latest deploy
