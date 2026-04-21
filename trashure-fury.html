@@ -13511,6 +13511,20 @@ function _mpShowHint(text) { if (_mp.wrHint) _mp.wrHint.textContent = text; }
 function _mpApplyPoses(poses) {
   if (!_mp._boatSnaps) _mp._boatSnaps = new Map();
   if (!Array.isArray(_mp.seats) || _mp.seats.length === 0) return;
+  // Sweep any local-only garbage pieces that slipped past the server's
+  // snapshot (beach plastic from a pre-MP init, death-drops from before
+  // the MP fix landed). Anything without a serverId is unpickable
+  // clutter in MP — runs every pose tick so the field never accumulates
+  // ghost pieces even when the server spawn cap is already full and no
+  // g_add broadcasts are firing.
+  if (typeof garbage !== 'undefined' && garbage) {
+    for (let gi = garbage.length - 1; gi >= 0; gi--) {
+      if (!garbage[gi].serverId) {
+        try { removeGarbageMesh(garbage[gi].id); } catch (e) {}
+        garbage.splice(gi, 1);
+      }
+    }
+  }
   const nowMs = performance.now();
   for (const p of poses) {
     const seat = _mp.seats[p.i];
