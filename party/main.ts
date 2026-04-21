@@ -562,6 +562,15 @@ export default class TrashureRoom implements Party.Server {
       return;
     }
 
+    // Resync: client realized its garbage view may have drifted (e.g.
+    // after a death / respawn). Reply with a fresh snapshot containing
+    // the exact current server field, and the client will reset and
+    // rebuild to match.
+    if (data.type === "g_resync") {
+      this.sendGarbageSnapshot(conn);
+      return;
+    }
+
     if (data.type === "boat" && seat?.kind === "human") {
       const x = Number(data.x), z = Number(data.z), r = Number(data.rot);
       if (Number.isFinite(x) && Number.isFinite(z) && Number.isFinite(r)) {

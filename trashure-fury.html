@@ -4293,10 +4293,21 @@ function handleDeath(player) {
   // how much plastic to drop and it spawns real shared pieces that
   // every captain can see + scoop. Local spawn is skipped.
   const _mpActiveDeath = !!(_mp && _mp.ws && _mp.ws.readyState === WebSocket.OPEN && _mp.roundLaunched);
-  if (_mpActiveDeath && player.id === 'local' && itemCount > 0) {
-    try {
-      _mp.ws.send(JSON.stringify({ type: 'sink_drop', pts: itemCount }));
-    } catch (e) {}
+  if (_mpActiveDeath && player.id === 'local') {
+    if (itemCount > 0) {
+      try { _mp.ws.send(JSON.stringify({ type: 'sink_drop', pts: itemCount })); } catch (e) {}
+    }
+    // Ask the server for a fresh garbage snapshot after the
+    // respawn settles. If anything drifted during the death →
+    // scene-rebuild window, the snapshot reset wipes the local
+    // field and rebuilds from server truth.
+    setTimeout(() => {
+      try {
+        if (_mp.ws && _mp.ws.readyState === WebSocket.OPEN) {
+          _mp.ws.send(JSON.stringify({ type: 'g_resync' }));
+        }
+      } catch (e) {}
+    }, 800);
   }
   if (!_mpActiveDeath) {
     for (let i = 0; i < itemCount; i++) {
