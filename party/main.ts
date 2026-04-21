@@ -257,15 +257,17 @@ export default class TrashureRoom implements Party.Server {
         seat.x = x; seat.z = z; seat.rot = r;
       }
       seat.boosting = !!data.b;
-      // Self-reported health for non-combat damage (pirates, mines,
-      // island). Combat damage still flows through the authoritative
-      // 'hit' path, so we only trust self-report to *lower* health —
-      // never to heal. If a client sends a higher number than we
-      // already have, we ignore it (heals happen server-side via
-      // pink pickups).
+      // Self-reported health. The client is authoritative for its
+      // own HP display — it already knows about pirate damage, mine
+      // hits, island collisions, pink pickups, respawns, everything.
+      // Combat hits from other players still go through the 'hit'
+      // path (attacker reports victim seat + dmg; server validates
+      // invuln window and broadcasts), so that stays authoritative.
+      // The trade-off: a malicious client could lie about its own
+      // HP, but scoring (plastic pickups) is server-authoritative so
+      // the worst they can do is refuse to die, not inflate score.
       if (typeof data.h === "number" && Number.isFinite(data.h)) {
-        const reported = Math.max(0, Math.min(seat.maxHealth, data.h | 0));
-        if (reported < seat.health) seat.health = reported;
+        seat.health = Math.max(0, Math.min(seat.maxHealth, data.h | 0));
       }
       return;
     }

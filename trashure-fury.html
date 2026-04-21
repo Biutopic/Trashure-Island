@@ -13481,24 +13481,33 @@ function _mpApplyPoses(poses) {
   }
 }
 
-// Apply an incoming server hit broadcast. If we're the victim, damage
-// localPlayer + show the vignette. If we're the attacker or a third
-// party, update the remote bot's displayed health.
+// Apply an incoming server hit broadcast.
+//
+// When we're the VICTIM: the two clients (attacker + us) may BOTH
+// have detected the collision and posted a 'hit', so the server
+// broadcasts two echoes. We'd double-apply damage if we naively
+// subtracted on each one. The invuln window on the server throws
+// out the second hit (match to the client's 700ms), so only the
+// first lands — but we also avoid local subtraction here entirely
+// and just snap to the server's authoritative health value.
+// The local client then continues self-reporting via the 20Hz
+// boat message, keeping everyone in sync.
+//
+// When we're the ATTACKER or a SPECTATOR: update the remote bot's
+// displayed health from the authoritative number in the echo.
 function _mpApplyHit(data) {
   const targetIdx = data.target | 0;
-  const dmg = Math.max(0, +data.dmg || 0);
   const newHealth = (typeof data.health === 'number') ? (data.health | 0) : null;
   if (targetIdx === _mp.mySeatIdx && typeof localPlayer !== 'undefined') {
-    localPlayer.health = Math.max(0, (localPlayer.health || 0) - dmg);
+    // Snap to server truth (never subtract to avoid double-damage).
+    if (newHealth !== null) localPlayer.health = Math.max(0, newHealth);
     if (typeof gameTime !== 'undefined') localPlayer.lastHitTime = gameTime;
     try { if (typeof triggerHitEffect === 'function') triggerHitEffect(); } catch (e) {}
   }
-  // Keep the remote bot's rendered health matched to server truth.
   if (newHealth !== null && Array.isArray(_mp.remoteBoats)) {
     for (const rb of _mp.remoteBoats) {
       if (rb.seatIdx === targetIdx) { rb.health = newHealth; break; }
     }
-    // Propagate to the local bot slot currently driven by this seat, if any.
     if (_mp._remoteByBotId) {
       for (const [botId, rb] of _mp._remoteByBotId.entries()) {
         if (rb.seatIdx === targetIdx) {
