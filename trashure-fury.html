@@ -12318,29 +12318,45 @@ function gameLoop(timestamp) {
       if (mesh && mesh.visible === false) mesh.visible = true;
     }
     if (_mpRemote) {
-      // Snapshot interpolation: find where this boat should be right
-      // now between the last two snapshots. Render ~100 ms in the
-      // past so we always have a "next" to lerp toward — the classic
-      // multiplayer trick for smooth-but-accurate remote motion.
+      // Snapshot extrapolation: derive velocity from the last two
+      // server snapshots and keep gliding the boat forward between
+      // packets. When the next packet arrives we smoothly lerp to
+      // the corrected position. At 10 Hz server rate this still
+      // renders at 60 fps without the stutter you get from plain
+      // snapshot interpolation.
       const snap = _mp._boatSnaps && _mp._boatSnaps.get(_mpRemote.pid);
       if (snap) {
-        const nowMs  = performance.now();
-        const span   = Math.max(1, snap.next.t - snap.prev.t);
-        const alpha  = Math.max(0, Math.min(1, (nowMs - snap.prev.t) / span));
-        const prevX = snap.prev.x, prevZ = snap.prev.z, prevR = snap.prev.rot;
-        const nextX = snap.next.x, nextZ = snap.next.z, nextR = snap.next.rot;
-        const nx = prevX + (nextX - prevX) * alpha;
-        const nz = prevZ + (nextZ - prevZ) * alpha;
-        // Smallest-arc angle interpolation
-        let dr = nextR - prevR;
-        while (dr > Math.PI)  dr -= 2 * Math.PI;
-        while (dr < -Math.PI) dr += 2 * Math.PI;
-        const nr = prevR + dr * alpha;
-        // Derive velocity from the snapshot pair so wakes still read right
-        const vscale = span > 0 ? (1000 / span) : 0;
-        bot.vx = (nextX - prevX) * vscale;
-        bot.vz = (nextZ - prevZ) * vscale;
-        bot.x = nx; bot.z = nz; bot.rotation = nr;
+        const nowMs = performance.now();
+        const span  = Math.max(1, snap.next.t - snap.prev.t);
+        const vscale = 1000 / span;
+        const vx = (snap.next.x - snap.prev.x) * vscale;
+        const vz = (snap.next.z - snap.prev.z) * vscale;
+        let drot = snap.next.rot - snap.prev.rot;
+        while (drot > Math.PI)  drot -= 2 * Math.PI;
+        while (drot < -Math.PI) drot += 2 * Math.PI;
+        const vrot = drot * vscale;
+        const since = (nowMs - snap.next.t) / 1000;
+        // Predict where the boat should be *now* if it kept moving.
+        const tgtX = snap.next.x + vx * since;
+        const tgtZ = snap.next.z + vz * since;
+        const tgtRot = snap.next.rot + vrot * since;
+        if (bot._mpLastSnap !== snap.next.t) {
+          // New packet: absorb most of the correction quickly so we
+          // don't drift further. A small lerp keeps it smooth.
+          bot._mpLastSnap = snap.next.t;
+          bot.x += (tgtX - bot.x) * 0.6;
+          bot.z += (tgtZ - bot.z) * 0.6;
+        } else {
+          // Between packets: extrapolate at render rate. dt is the
+          // frame delta, so the boat advances at real velocity.
+          bot.x += vx * dt;
+          bot.z += vz * dt;
+        }
+        let drr = tgtRot - bot.rotation;
+        while (drr > Math.PI)  drr -= 2 * Math.PI;
+        while (drr < -Math.PI) drr += 2 * Math.PI;
+        bot.rotation += drr * Math.min(1, dt * 10);
+        bot.vx = vx; bot.vz = vz;
       }
       bot.name = _mpRemote.name || bot.name;
       bot.isBoosting = !!_mpRemote.boosting;
@@ -13804,22 +13820,27 @@ function _mpApplyWorldPoses(world) {
       let found = null;
       for (const p of pirates) { if (p.serverId === (wire.i | 0)) { found = p; break; } }
       if (!found) { _mpBuildServerPirate({ id: wire.i, x: wire.x, z: wire.z, r: wire.r, h: wire.h, e: wire.e }); continue; }
-      // Smooth snap — server ticks at 20 Hz, render at 60 Hz; simple
-      // lerp covers the gap.
-      const k = 0.35;
-      found.x += (wire.x - found.x) * k;
-      found.z += (wire.z - found.z) * k;
-      let da = wire.r - found.rotation;
-      while (da >  Math.PI) da -= 2 * Math.PI;
-      while (da < -Math.PI) da += 2 * Math.PI;
-      found.rotation += da * k;
+      // Keep a small history on each pirate so we can extrapolate
+      // between server packets — the local game loop reads pirate
+      // positions every frame and would otherwise render a stair-
+      // step effect at 10 Hz.
+      const nowMs = performance.now();
+      if (found._mpPrev && found._mpNext && found._mpNext.t !== nowMs) {
+        found._mpPrev = found._mpNext;
+      }
+      found._mpNext = { x: wire.x, z: wire.z, r: wire.r, t: nowMs };
+      if (!found._mpPrev) found._mpPrev = found._mpNext;
+      // Snap closer to the newest server pose. Extrapolation happens
+      // in the game loop via simple velocity carry-over on bot.vx/vz
+      // (we just publish the numbers here).
+      found.x = wire.x;
+      found.z = wire.z;
+      found.rotation = wire.r;
       found.health = wire.h | 0;
       found.emerged = !!wire.e;
       found.frozen = !wire.e;
       const mesh = pirateMeshes && pirateMeshes.get(found.id);
-      if (mesh) {
-        mesh.visible = found.emerged;
-      }
+      if (mesh) mesh.visible = found.emerged;
     }
   }
 }
