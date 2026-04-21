@@ -13336,30 +13336,30 @@ function _mpStopHeartbeat() {
 function _mpStartBoatUploader() {
   if (_mp.boatUpWorker) _mp.boatUpWorker.terminate();
   try {
-    // 20 Hz upload to match the server tick / broadcast rate. Halves
-    // the end-to-end latency vs the previous 10 Hz cadence.
-    const code = 'setInterval(function(){ self.postMessage(0); }, 50);';
+    // 10 Hz upload — matches the server tick rate. Client-side
+    // snapshot interpolation smooths the gap so remote boats still
+    // look fluid at half the bandwidth.
+    const code = 'setInterval(function(){ self.postMessage(0); }, 100);';
     const blob = new Blob([code], { type: 'application/javascript' });
     _mp.boatUpWorker = new Worker(URL.createObjectURL(blob));
     _mp.boatUpWorker.onmessage = () => {
       if (!_mp.ws || _mp.ws.readyState !== WebSocket.OPEN) return;
       if (_mp.phase !== 'PLAYING' || !_mp.roundLaunched) return;
       if (typeof localPlayer === 'undefined' || !localPlayer) return;
+      const boosting = !!(localPlayer.isBoosting);
+      const health   = Math.max(0, Math.min(100, Math.round(localPlayer.health | 0)));
+      const x = +localPlayer.x.toFixed(2);
+      const z = +localPlayer.z.toFixed(2);
+      const rot = +((localPlayer.rotation || 0).toFixed(3));
+      // Skip the send if nothing changed meaningfully since last time.
+      // Saves 10 messages/sec when the player is parked.
+      const stamp = x + ',' + z + ',' + rot + ',' + (boosting ? 1 : 0) + ',' + health;
+      if (_mp._lastBoatStamp === stamp) return;
+      _mp._lastBoatStamp = stamp;
       try {
-        const boosting = !!(localPlayer.isBoosting);
         _mp.ws.send(JSON.stringify({
           type: 'boat',
-          x: +localPlayer.x.toFixed(2),
-          z: +localPlayer.z.toFixed(2),
-          rot: +((localPlayer.rotation || 0).toFixed(3)),
-          b: boosting ? 1 : 0,
-          // Self-reported health so the other client's display of us
-          // reflects damage from local-only sources (pirate bombs,
-          // mines, island collisions). Hit events from player-vs-
-          // player combat still go through the authoritative server
-          // path so scores can't be spoofed by a captain lying about
-          // their HP.
-          h: Math.max(0, Math.min(100, Math.round(localPlayer.health | 0))),
+          x, z, rot, b: boosting ? 1 : 0, h: health,
         }));
       } catch (e) {}
     };

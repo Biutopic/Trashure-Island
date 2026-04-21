@@ -130,7 +130,7 @@ const QUICK_START_MS   = 10_000; // 10s grace after all humans ready
 const COUNTDOWN_MS     = 3_000;
 const PLAYING_MS       = 180_000; // 3 minutes
 const RECAP_MS         = 15_000;
-const TICK_MS          = 50;      // 20 Hz. Full state on changes only; poses compact.
+const TICK_MS          = 100;     // 10 Hz. Halved from 20 Hz to keep bandwidth low — client-side snapshot interpolation fills the gap smoothly.
 const MIN_HUMANS_TO_START = 2;    // solo lobby never advances: use "Play offline" on the client
 const MAX_HEALTH_SERVER   = 100;  // match client MAX_HEALTH
 const HIT_INVULN_MS       = 700;  // match client INVULN_AFTER_HIT (0.7s)
@@ -887,6 +887,10 @@ export default class TrashureRoom implements Party.Server {
   // drives the remote-boat interpolation. Full state broadcasts are
   // reserved for actual state changes (phase, ready, hello, seat
   // takeover) to keep the wire quiet.
+  // Track the last-broadcast seat pose so we can skip when nothing
+  // moved and save bandwidth.
+  private lastPoseHash = "";
+
   private broadcastIfPlaying() {
     if (this.state.phase !== "PLAYING") return;
     const poses: Array<any> = [];
@@ -926,6 +930,17 @@ export default class TrashureRoom implements Party.Server {
       z: Math.round(this.hydro.z * 100) / 100,
       r: Math.round(this.hydro.rot * 1000) / 1000,
     };
+    // Skip the send if nothing changed since last tick. Rough hash
+    // is cheap and catches the common "everybody standing still"
+    // case after respawn / lobby.
+    const hashParts: string[] = [];
+    for (const p of poses) hashParts.push(p.i + ':' + p.x + ',' + p.z + ',' + p.r + ',' + p.h + ',' + p.s + (p.b ? 'b' : ''));
+    if (world.p) for (const p of world.p) hashParts.push('P' + p.i + ':' + p.x + ',' + p.z + ',' + p.r + ',' + p.h + ',' + p.e);
+    if (world.w) hashParts.push('W' + world.w.x + ',' + world.w.z + ',' + world.w.s);
+    if (world.h) hashParts.push('H' + world.h.x + ',' + world.h.z);
+    const hash = hashParts.join('|');
+    if (hash === this.lastPoseHash) return;
+    this.lastPoseHash = hash;
     this.room.broadcast(JSON.stringify({ type: "poses", poses, world }));
   }
 
