@@ -13284,6 +13284,8 @@ function _mpConnect() {
     }
     if (data.type === 'state' && data.state) {
       _mpApplyState(data.state);
+    } else if (data.type === 'poses' && Array.isArray(data.poses)) {
+      _mpApplyPoses(data.poses);
     }
   });
   _mp.ws.addEventListener('close', () => {
@@ -13313,6 +13315,30 @@ function _mpSend(obj) {
   }
 }
 function _mpShowHint(text) { if (_mp.wrHint) _mp.wrHint.textContent = text; }
+
+// Compact pose updates fire at 20 Hz during PLAYING. Only touch the
+// snapshot interpolation buffers — don't rebuild _mp.remoteBoats or
+// re-render the lobby, that's wasted work when just positions change.
+function _mpApplyPoses(poses) {
+  if (!_mp._boatSnaps) _mp._boatSnaps = new Map();
+  if (!Array.isArray(_mp.seats) || _mp.seats.length === 0) return;
+  const nowMs = performance.now();
+  for (const p of poses) {
+    const seat = _mp.seats[p.i];
+    if (!seat || seat.kind !== 'human') continue;
+    seat.x = p.x; seat.z = p.z; seat.rot = p.r;
+    if (p.i === _mp.mySeatIdx) continue; // don't interpolate our own boat
+    const latest = { x: p.x, z: p.z, rot: p.r, t: nowMs };
+    const entry = _mp._boatSnaps.get(seat.pid);
+    if (!entry) _mp._boatSnaps.set(seat.pid, { prev: latest, next: latest });
+    else { entry.prev = entry.next; entry.next = latest; }
+    // Keep remoteBoats entries in sync so _mpRemoteByBotId mapping sees
+    // up-to-date positions (names stay from the last full state).
+    for (const rb of _mp.remoteBoats) {
+      if (rb.seatIdx === p.i) { rb.x = p.x; rb.z = p.z; rb.rot = p.r; break; }
+    }
+  }
+}
 
 function _mpApplyState(state) {
   _mp.phase = state.phase;

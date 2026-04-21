@@ -60,7 +60,7 @@ const QUICK_START_MS   = 30_000; // 30s grace after all humans ready
 const COUNTDOWN_MS     = 3_000;
 const PLAYING_MS       = 180_000; // 3 minutes
 const RECAP_MS         = 15_000;
-const TICK_MS          = 50;      // 20 Hz — faster position fan-out during PLAYING
+const TICK_MS          = 50;      // 20 Hz. Full state on changes only; poses compact.
 const MIN_HUMANS_TO_START = 2;    // solo lobby never advances: use "Play offline" on the client
 
 const COLORS    = ["#ff5a3c", "#ffd93d", "#4ade80", "#22d3ee"];
@@ -307,12 +307,28 @@ export default class TrashureRoom implements Party.Server {
     this.broadcastState();
   }
 
-  // PartyKit calls into tick() on an interval. Between phase transitions
-  // (which already broadcast), we still want to push snapshots during
-  // PLAYING so other clients see live boat positions without waiting
-  // for the next phase change. Called at the end of every tick.
+  // During PLAYING, fan out a compact "poses" message with just the
+  // per-seat x/z/rotation. Much smaller than the full state (which
+  // carries name/ready/color/pid/etc) — this is what runs 20 Hz and
+  // drives the remote-boat interpolation. Full state broadcasts are
+  // reserved for actual state changes (phase, ready, hello, seat
+  // takeover) to keep the wire quiet.
   private broadcastIfPlaying() {
-    if (this.state.phase === "PLAYING") this.broadcastState();
+    if (this.state.phase !== "PLAYING") return;
+    const poses: Array<{ i: number; x: number; z: number; r: number }> = [];
+    for (let i = 0; i < this.state.seats.length; i++) {
+      const s = this.state.seats[i];
+      if (s.kind === "human") {
+        // 2-decimal precision is plenty for rendering; shrinks the wire.
+        poses.push({
+          i,
+          x: Math.round(s.x * 100) / 100,
+          z: Math.round(s.z * 100) / 100,
+          r: Math.round(s.rot * 1000) / 1000,
+        });
+      }
+    }
+    this.room.broadcast(JSON.stringify({ type: "poses", poses }));
   }
 
   // ---- helpers ----
