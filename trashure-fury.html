@@ -14364,6 +14364,13 @@ function beginGame() {
   if (ss) ss.hidden = true;
   _mp.roundLaunched = true;
   _mp.selfReady = false;
+  // Seed the phase to PLAYING so the boat-upload worker starts
+  // streaming our pose immediately. Without this it waits for the
+  // first 'state' message from the server, during which the other
+  // captains see us frozen → laggy-looking remote boats. The worker
+  // re-checks every tick, so it'll self-correct if the server ever
+  // disagrees (shouldn't in the always-on build).
+  _mp.phase = 'PLAYING';
   _mpConnect();
   _beginLocalRound();
 }
