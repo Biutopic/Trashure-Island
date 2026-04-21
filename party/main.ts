@@ -137,10 +137,10 @@ const HIT_INVULN_MS       = 700;  // match client INVULN_AFTER_HIT (0.7s)
 
 // Shared garbage field. Keep the counts modest so the per-tick wire
 // + initial snapshot stay cheap.
-const MAX_GARBAGE          = 25;   // lower cap so the ocean doesn't clog
+const MAX_GARBAGE          = 50;   // enough to keep the ocean stocked for 2+ players
 const GARBAGE_WORLD_RADIUS = 155;  // slightly inside the client WORLD_RADIUS (160)
 const GARBAGE_ISLAND_PAD   = 18;
-const GARBAGE_SPAWN_MS     = 2000; // ~0.5 Hz spawn — slower drip into the field
+const GARBAGE_SPAWN_MS     = 700;  // ~1.4 Hz — faster restock
 const PINK_CHANCE          = 0.10; // fraction of spawns that heal
 const MAX_DEATH_DROP       = 6;    // cap per-sink drop so a chain of deaths doesn't flood
 

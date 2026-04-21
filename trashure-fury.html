@@ -13666,8 +13666,15 @@ function _mpBuildGarbageFromServer(item) {
 }
 function _mpApplyGarbageAdd(data) {
   if (!Array.isArray(data.items) || typeof garbage === 'undefined') return;
-  // If it's a snapshot, wipe first so joiners pick up the exact field.
-  if (data.type === 'g_snap') _mpApplyGarbageReset();
+  // If it's a snapshot AND it has pieces, wipe first so joiners pick
+  // up the exact field. An empty snapshot is ignored — almost always
+  // means the server just cleared between rounds and a proper g_reset
+  // is on the way; wiping on every empty snap would zero a healthy
+  // field whenever a resync happened to arrive during that gap.
+  if (data.type === 'g_snap') {
+    if (data.items.length === 0) return;
+    _mpApplyGarbageReset();
+  }
   // Also sweep any local-only pieces that slipped in — beach plastic
   // from a pre-MP init, death drops from before the MP fix landed,
   // etc. Anything without a serverId is unpickable clutter in MP.
