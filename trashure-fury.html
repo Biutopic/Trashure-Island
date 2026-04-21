@@ -1591,6 +1591,12 @@
 
     /* ---- BEGINNER TIPS ---- */
     /* ---- RADAR (bottom-right, marine-radar style) ---- */
+    /* Online mode: hide UI overlays that distract from the multiplayer
+       experience. The radar, controls hint, and Hydronaute-IA panel
+       stay for solo / split-screen where they actually help. */
+    body.mp-online #radar-hud,
+    body.mp-online #controls-hint,
+    body.mp-online #hydro-hud { display: none !important; }
     #radar-hud {
       position: fixed; bottom: 18px; right: 18px;
       width: 184px; height: 184px;
@@ -2284,6 +2290,113 @@ let seaMineModelTemplate = null;
 const botBrains = new Map();
 
 const input = { forward: false, backward: false, left: false, right: false, boost: false, fire: false };
+
+// ============================================================
+// SPLIT-SCREEN (local multi) state
+// ============================================================
+// When splitMode is 'off' the game runs as before with a single
+// camera + HUD. When it's '2' we render two viewports side-by-side
+// and drive a second local boat from a separate input object. The
+// world (plastic, pirates, whale) is shared — everyone lives in the
+// same ocean, they just each get their own camera and HUD.
+//
+// Keeping these at the top level (not inside a helper) so references
+// from the render / update / input paths all see the same values.
+const splitInput2 = { forward: false, backward: false, left: false, right: false, boost: false, fire: false };
+let splitMode = 'off';     // 'off' | '2' (future: '3', '4')
+let splitP2 = null;        // second local player object, mirrors localPlayer shape
+let splitP2Camera = null;  // follow-camera for P2
+let splitP2Upgrades = { solar_panel: 0, speed: 0, magnet: 0, solar_panel_stacks: 0 };
+
+// ---------- split-screen helpers ----------
+// Built lazily when the user picks MULTI LOCAL from the menu so solo /
+// online paths don't pay any init cost. Creates P2 with a mirrored
+// player object, a dedicated Three.js PerspectiveCamera, and the P2
+// HUD element; wires everything up so the main game loop can drive
+// two players in parallel.
+function initSplitTwoPlayer() {
+  if (splitMode === '2') return;
+  splitMode = '2';
+  // Spawn P2 opposite corner from P1 for a fair start.
+  const corner = SPAWN_CORNERS[2 % SPAWN_CORNERS.length] || { x: 30, z: 30 };
+  splitP2 = {
+    id: 'local2',
+    name: 'Capitaine 2',
+    x: corner.x, z: corner.z,
+    rotation: Math.atan2(-corner.x, -corner.z),
+    health: MAX_HEALTH,
+    plasticCount: 0,
+    totalCollected: 0,
+    boatLevel: 1,
+    vx: 0, vz: 0,
+    lastHitTime: -999,
+    boostEnergy: 1,
+    isBot: false,
+    color: PLAYER_COLORS[1] || '#ff5a3c',
+  };
+  // Dedicated camera — same FOV/near/far as the main one. Split
+  // viewports always render the same scene; only the camera + viewport
+  // rect change between passes.
+  if (typeof THREE !== 'undefined') {
+    splitP2Camera = new THREE.PerspectiveCamera(60, 1, 0.1, 2000);
+    splitP2Camera.position.set(splitP2.x, CAMERA_HEIGHT, splitP2.z + CAMERA_FOLLOW_DISTANCE);
+    splitP2Camera.lookAt(splitP2.x, 0, splitP2.z);
+  }
+  // P2 HUD (cloned from the main one, repositioned via CSS class).
+  _ensureSplitHudP2();
+  // Hide the online waiting-room leaderboard column that would overlap
+  // the second HUD.
+  const lb = document.getElementById('leaderboard');
+  if (lb) lb.classList.add('split-mode');
+}
+
+function _ensureSplitHudP2() {
+  if (document.getElementById('hud-p2')) return;
+  const base = document.getElementById('hud');
+  if (!base) return;
+  const p2 = base.cloneNode(true);
+  p2.id = 'hud-p2';
+  // Rewrite child ids so CSS / JS can address them independently.
+  p2.querySelectorAll('[id]').forEach(el => {
+    el.id = el.id + '-p2';
+  });
+  document.body.appendChild(p2);
+}
+
+// Update P2 each frame: steer, move, collect plastic, bobbing wave
+// math — same calls the main player goes through, just passing the P2
+// player object + P2 input. Runs only when splitMode === '2'.
+function _updateSplitPlayerTwo(dt) {
+  if (splitMode !== '2' || !splitP2) return;
+  try { movePlayer(splitP2, splitInput2, dt, splitP2Upgrades); } catch (e) {}
+  try { checkGarbageCollection(splitP2, splitP2Upgrades); } catch (e) {}
+  // Follow-camera — exactly the same math as updateCamera() but driven
+  // by splitP2 instead of localPlayer.
+  if (splitP2Camera) {
+    const tx = splitP2.x - Math.sin(splitP2.rotation) * CAMERA_FOLLOW_DISTANCE;
+    const tz = splitP2.z - Math.cos(splitP2.rotation) * CAMERA_FOLLOW_DISTANCE;
+    const wH = getWaveHeight(splitP2.x, splitP2.z, gameTime);
+    const ty = wH + CAMERA_HEIGHT;
+    splitP2Camera.position.x += (tx - splitP2Camera.position.x) * 0.05;
+    splitP2Camera.position.y += (ty - splitP2Camera.position.y) * 0.05;
+    splitP2Camera.position.z += (tz - splitP2Camera.position.z) * 0.05;
+    splitP2Camera.lookAt(splitP2.x, wH + CAMERA_LOOK_Y, splitP2.z);
+  }
+}
+
+// Refresh P2's HUD (HP + energy + plastic) once per UI tick. Mirrors
+// the updateHUD() code path for P1.
+function _updateSplitHudTwo() {
+  if (splitMode !== '2' || !splitP2) return;
+  const hp = document.getElementById('hud-hp-p2');
+  if (hp) hp.style.width = Math.max(0, Math.min(100, (splitP2.health / MAX_HEALTH) * 100)) + '%';
+  const boost = document.getElementById('hud-boost-p2');
+  if (boost) boost.style.width = Math.max(0, Math.min(100, splitP2.boostEnergy * 100)) + '%';
+  const tot = document.getElementById('hud-total-p2');
+  if (tot) tot.textContent = splitP2.totalCollected | 0;
+  const nm = document.getElementById('hud-name-p2');
+  if (nm) nm.textContent = splitP2.name;
+}
 
 // 3D references
 let playerMesh = null;
@@ -8310,6 +8423,9 @@ function worldToScreen(wx, wy, wz) {
 // ============================================================
 // 11. INPUT HANDLING
 // ============================================================
+// In solo / online, arrows duplicate WASD for accessibility. In
+// splitMode='2' the arrows are re-routed to the second player, so we
+// select between two maps based on splitMode at read time.
 const keyMap = {
   KeyW: 'forward',    ArrowUp: 'forward',
   KeyS: 'backward',   ArrowDown: 'backward',
@@ -8317,15 +8433,45 @@ const keyMap = {
   KeyD: 'right',      ArrowRight: 'right',
   Space: 'boost',
 };
+// Split-screen P1: WASD + Space (same as usual).
+// Split-screen P2: Arrows + Enter.
+const keyMapP1Split = {
+  KeyW: 'forward',
+  KeyS: 'backward',
+  KeyA: 'left',
+  KeyD: 'right',
+  Space: 'boost',
+};
+const keyMapP2Split = {
+  ArrowUp:    'forward',
+  ArrowDown:  'backward',
+  ArrowLeft:  'left',
+  ArrowRight: 'right',
+  Enter:      'boost',
+};
+// Look up the target input object + action for a given key code,
+// depending on whether we're in split mode. Returns null if the key
+// isn't bound for the current mode.
+function _resolveKeyBinding(code) {
+  if (splitMode === '2') {
+    if (code in keyMapP1Split) return { who: 'p1', act: keyMapP1Split[code] };
+    if (code in keyMapP2Split) return { who: 'p2', act: keyMapP2Split[code] };
+    return null;
+  }
+  return (code in keyMap) ? { who: 'p1', act: keyMap[code] } : null;
+}
 
 window.addEventListener('keydown', (e) => {
-  const act = keyMap[e.code];
-  if (act) {
-    const wasOn = input[act];
-    input[act] = true;
+  const binding = _resolveKeyBinding(e.code);
+  if (binding) {
+    const target = binding.who === 'p2' ? splitInput2 : input;
+    const actor  = binding.who === 'p2' ? splitP2     : localPlayer;
+    const act    = binding.act;
+    const wasOn  = target[act];
+    target[act] = true;
     // Play the whoosh the instant the player engages turbo, but only
     // if they actually have energy to burn (no sound for a dead boost).
-    if (act === 'boost' && !wasOn && localPlayer && localPlayer.boostEnergy > 0.05) {
+    if (act === 'boost' && !wasOn && actor && actor.boostEnergy > 0.05) {
       try { sfx.boost(); } catch (err) {}
     }
     e.preventDefault();
@@ -8357,8 +8503,11 @@ window.addEventListener('keydown', (e) => {
   }
 });
 window.addEventListener('keyup', (e) => {
-  const act = keyMap[e.code];
-  if (act) input[act] = false;
+  const binding = _resolveKeyBinding(e.code);
+  if (binding) {
+    const target = binding.who === 'p2' ? splitInput2 : input;
+    target[binding.act] = false;
+  }
 
   // Fire release (Shift) — shoot fireball
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
@@ -11566,9 +11715,31 @@ function updateCrabIntro(dt, cdTimer) {
   updateCrabJetParticles(dt, jetIntensity);
 }
 
+// Dedicated mesh for the P2 boat in local split-screen. Built once at
+// initGame() time when splitMode === '2'; positioned per frame from
+// splitP2.x/z inside the main render pass like the P1 mesh.
+let splitP2Mesh = null;
+
 function initGame() {
   if (bots.length > 0) return; // guard re-init
   playerMesh = makePlayerMesh();
+  // Split-screen: build a second boat mesh next to P1's so both players
+  // are visible in both viewports. Clones the same template and places
+  // it at the opposite corner — the per-frame pose update below writes
+  // splitP2.x/z onto it just like P1.
+  if (splitMode === '2' && splitP2 && typeof THREE !== 'undefined') {
+    try {
+      let tpl;
+      if (fisherBoatTemplate)       tpl = fisherBoatTemplate.clone();
+      else if (boatModelTemplate)   tpl = boatModelTemplate.clone();
+      else if (typeof createProceduralBoat === 'function') tpl = createProceduralBoat(0xff5a3c);
+      if (tpl) {
+        tpl.position.set(splitP2.x, 0.8, splitP2.z);
+        scene.add(tpl);
+        splitP2Mesh = tpl;
+      }
+    } catch (e) {}
+  }
   // Grab the GLTF inner group (the tug-boat template wraps the model in a
   // child with rotation.y = π and position(0,-40,0) so we pitch by adding X
   // rotation directly to it — this is the ONE object that actually transforms
@@ -11953,6 +12124,27 @@ const _allEntities = [];      // reusable array for players + pirates
 // on top of the world AND the HUD-equivalent 3D countdown text.
 function renderFrame() {
   const needOverlay = countdownActive || crabIntroGroup || (countdownSprite && countdownSprite.visible);
+  // Split-screen: render each active viewport in turn. In 2-player we
+  // draw P1 on the left half and P2 on the right half. Same scene for
+  // all passes — only the camera and scissor rect change. We use the
+  // renderer's scissor test so each pass only touches its own quadrant.
+  if (splitMode === '2' && splitP2Camera) {
+    const w = renderer.domElement.width;
+    const h = renderer.domElement.height;
+    const halfW = Math.floor(w / 2);
+    renderer.setScissorTest(true);
+    // Pass 1a: P1 — left half.
+    _renderViewport(camera, 0, 0, halfW, h, needOverlay);
+    // Pass 1b: P2 — right half. Keep P2 aspect in sync with its
+    // viewport so the FOV doesn't feel stretched.
+    splitP2Camera.aspect = halfW / h;
+    splitP2Camera.updateProjectionMatrix();
+    _renderViewport(splitP2Camera, halfW, 0, w - halfW, h, needOverlay);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, w, h);
+    camera.layers.set(0);
+    return;
+  }
   // Pass 1: world / gameplay objects (layer 0 only). Normal auto-clear here
   // so the frame starts from a clean slate.
   camera.layers.set(0);
@@ -11969,6 +12161,25 @@ function renderFrame() {
   }
   // Restore default layer so any raycasts / utilities see the world
   camera.layers.set(0);
+}
+
+// Render a single split-screen viewport. Called twice per frame in
+// splitMode === '2' — once per camera. Scissor rect clips the clear
+// + draw calls to just this player's half of the canvas.
+function _renderViewport(cam, x, y, width, height, needOverlay) {
+  renderer.setViewport(x, y, width, height);
+  renderer.setScissor(x, y, width, height);
+  cam.layers.set(0);
+  renderer.autoClear = true;
+  renderer.render(scene, cam);
+  if (needOverlay) {
+    renderer.autoClear = false;
+    renderer.clearDepth();
+    cam.layers.set(CRAB_LAYER);
+    renderer.render(scene, cam);
+    renderer.autoClear = true;
+  }
+  cam.layers.set(0);
 }
 
 function gameLoop(timestamp) {
@@ -12208,6 +12419,13 @@ function gameLoop(timestamp) {
     _gameplayInput = Object.assign({}, effInput, { forward: false, backward: false, boost: false });
   }
   const isBoosting = movePlayer(localPlayer, _gameplayInput, dt, playerUpgrades);
+  // Local split-screen: drive P2 in lockstep with P1 each frame.
+  // checkGarbageCollection + movePlayer are shared so they work on any
+  // player object. P2 bypasses the MP code path entirely — in split
+  // mode _mp.ws stays closed so the collection logic stays local.
+  if (splitMode === '2' && splitP2) {
+    try { _updateSplitPlayerTwo(dt); } catch (e) {}
+  }
   const _isAccel = !!(_gameplayInput.forward || _gameplayInput.backward);
   // Run the continuous motor loop only after ignition — before that the
   // only sound is the one-shot starter SFX.
@@ -12809,6 +13027,15 @@ function gameLoop(timestamp) {
     // overwritten by this or any other frame-level rotation.set on playerMesh.
     playerMesh.rotation.order = 'YXZ';
     playerMesh.rotation.set(tilt.tiltX, yaw + baseYRot, tilt.tiltZ);
+    // Split-screen P2 mesh: slim version of the same pose math — just
+    // position + yaw. No exo module / pitch wrapper handling yet; the
+    // boat floats and turns correctly, which is enough for MVP.
+    if (splitMode === '2' && splitP2 && splitP2Mesh) {
+      const w2 = getWaveHeight(splitP2.x, splitP2.z, gameTime);
+      splitP2Mesh.position.set(splitP2.x, w2 + 0.5, splitP2.z);
+      splitP2Mesh.rotation.order = 'YXZ';
+      splitP2Mesh.rotation.set(0, splitP2.rotation + baseYRot, 0);
+    }
     // Turn banking: roll into turns like a real boat leaning into a curve.
     // Rate of yaw change (rad/s) → bank angle. Eased so the roll doesn't snap.
     if (_lastPlayerYaw === null) _lastPlayerYaw = yaw;
@@ -13363,6 +13590,7 @@ function gameLoop(timestamp) {
   if (uiUpdateAcc > 0.1) {
     uiUpdateAcc = 0;
     updateHUD();
+    if (splitMode === '2') _updateSplitHudTwo();
     updateLeaderboard();
     updateTimer();
   }
@@ -14365,6 +14593,9 @@ function beginSolo() {
   _mp.ws = null;
   if (_mp.reconnectTimer) { clearTimeout(_mp.reconnectTimer); _mp.reconnectTimer = null; }
   _mpHideWaitingRoom();
+  // Solo keeps the full HUD — drop the mp-online class so the radar,
+  // controls hint, and Hydronaute-IA panel all come back.
+  document.body.classList.remove('mp-online');
   _beginLocalRound();
 }
 window._beginSolo = beginSolo;
@@ -14375,36 +14606,20 @@ window._beginSolo = beginSolo;
 // slot exists without hitting a broken code path. Phase 2 will wire
 // this to the real multi-viewport launcher.
 // ============================================================
+// Launch local split-screen (Phase 2 MVP — 2 players via keyboard).
+// Close any MP WebSocket, flip splitMode on, then fall through to the
+// normal local round launcher. The game loop picks up splitMode and
+// drives both players + a second viewport from there.
 function beginSplit() {
-  // Guarded so this doesn't blow up if i18n hasn't finished loading.
-  const title = (typeof tr === 'function') ? tr('split_soon_title') : 'Coming soon';
-  const body  = (typeof tr === 'function') ? tr('split_soon_body')
-    : 'Four-player split-screen is on the way.';
-  // Cheap inline banner instead of a full modal — keeps the menu clean
-  // and matches the codebase's existing "no modal system" style.
-  let el = document.getElementById('split-soon-banner');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'split-soon-banner';
-    el.style.cssText = [
-      'position:fixed', 'z-index:9999', 'left:50%', 'top:24%',
-      'transform:translateX(-50%)',
-      'max-width:380px', 'padding:16px 20px',
-      'background:rgba(12,28,48,0.95)',
-      'border:1px solid rgba(160,220,255,0.55)',
-      'border-radius:12px',
-      'color:#e8f3ff', 'font-family:var(--font-body)',
-      'box-shadow:0 12px 40px rgba(0,0,0,0.5)',
-      'text-align:center', 'line-height:1.35',
-    ].join(';');
-    document.body.appendChild(el);
-  }
-  el.innerHTML =
-    '<div style="font-family:var(--font-heading);font-size:1rem;letter-spacing:2px;margin-bottom:6px;color:#ffd080;">'
-    + title.replace(/</g, '&lt;') + '</div>'
-    + '<div style="font-size:0.85rem;">' + body.replace(/</g, '&lt;') + '</div>';
-  clearTimeout(beginSplit._t);
-  beginSplit._t = setTimeout(() => { el && el.remove(); }, 4500);
+  try { if (_mp.ws) _mp.ws.close(); } catch (e) {}
+  _mp.ws = null;
+  if (_mp.reconnectTimer) { clearTimeout(_mp.reconnectTimer); _mp.reconnectTimer = null; }
+  _mpHideWaitingRoom();
+  // Split-screen keeps the full HUD too (it's a local game). Make sure
+  // we're not carrying the online hide-class from a previous session.
+  document.body.classList.remove('mp-online');
+  initSplitTwoPlayer();
+  _beginLocalRound();
 }
 window._beginSplit = beginSplit;
 
@@ -14529,6 +14744,10 @@ function beginGame() {
   // waiting-room middle step. Playable within the first asset tick.
   const ss = document.getElementById('start-screen');
   if (ss) ss.hidden = true;
+  // Mark the page as "online mode" so CSS can hide the solo-only
+  // HUDs (radar, controls hint, Hydronaute-IA panel). Solo + split
+  // leave this class off and keep the full HUD.
+  document.body.classList.add('mp-online');
   _mp.roundLaunched = true;
   _mp.selfReady = false;
   // Seed the phase to PLAYING so the boat-upload worker starts
