@@ -5426,12 +5426,29 @@ function updateFireballs(dt, now) {
       continue;
     }
 
-    // Hit pirates — fireballs are the primary anti-pirate weapon, hit hard (5x normal)
+    // Hit pirates — fireballs are the primary anti-pirate weapon, hit hard (5x normal).
+    // In MP, route hits against server-owned pirates through a 'p_hit'
+    // message so every client sees the damage / kill.
     for (const pirate of pirates) {
       if (!pirate.emerged || pirate.diving) continue;
       const dx = fb.x - pirate.x, dz = fb.z - pirate.z;
       if (dx * dx + dz * dz < (fb.blastRadius + 3) * (fb.blastRadius + 3)) {
         const pirateDmg = Math.round(fb.damage * 5);
+        // MP: server-owned pirate — route through p_hit, let the echo
+        // do the damage bookkeeping on all clients.
+        if (pirate._mpServer && _mp && _mp.ws && _mp.ws.readyState === WebSocket.OPEN) {
+          try {
+            _mp.ws.send(JSON.stringify({ type: 'p_hit', id: pirate.serverId | 0, dmg: pirateDmg }));
+          } catch (e) {}
+          events.push({
+            id: 'fbe_' + (collisionIdCounter++),
+            x: pirate.x, z: pirate.z,
+            text: '-' + pirateDmg + ' FEU',
+            color: '#ff6600', time: now, victimId: pirate.id, attackerId: fb.shooterId,
+          });
+          hit = true;
+          break;
+        }
         pirate.health -= pirateDmg;
         events.push({
           id: 'fbe_' + (collisionIdCounter++),
@@ -11826,6 +11843,10 @@ function gameLoop(timestamp) {
   // Wave 0 (first pirate)  — 60s
   // Wave 1 (second pirate) — 60s before game end
   // Wave 2 (third pirate)  — 30s before game end
+  // In multiplayer, the server owns pirate spawns — suppress the
+  // local waves so we don't double up.
+  const _mpPiratesRemote = !!(_mp && _mp.ws && _mp.ws.readyState === WebSocket.OPEN && _mp.roundLaunched);
+  if (!_mpPiratesRemote) {
   if (!pirateFirstSpawned && gameTime >= PIRATE_FIRST_SPAWN_TIME) {
     pirateFirstSpawned = true;
     for (let i = 0; i < PIRATE_COUNT; i++) makePirateEntity(i);
@@ -11842,6 +11863,7 @@ function gameLoop(timestamp) {
     makePirateEntity(pirates.length, true);
     spawnFloatingText(0, 0, tr('float_last_reinforcement'), '#ff2200');
   }
+  } // end !_mpPiratesRemote
 
   // --- Pre-ending fade-out ---
   // Starting ~3s before the clock hits zero, fade the live music (main
@@ -13397,6 +13419,7 @@ function _mpConnect() {
       _mpApplyState(data.state);
     } else if (data.type === 'poses' && Array.isArray(data.poses)) {
       _mpApplyPoses(data.poses);
+      if (data.world) _mpApplyWorldPoses(data.world);
     } else if (data.type === 'hit') {
       _mpApplyHit(data);
     } else if (data.type === 'sink') {
@@ -13409,6 +13432,28 @@ function _mpConnect() {
       _mpApplyGarbagePick(data);
     } else if (data.type === 'g_reset') {
       _mpApplyGarbageReset();
+    } else if (data.type === 'w_snap') {
+      _mpApplyWorldSnap(data);
+    } else if (data.type === 'w_reset') {
+      _mpApplyWorldReset();
+    } else if (data.type === 'p_add') {
+      _mpApplyPirateAdd(data.p);
+    } else if (data.type === 'p_kill') {
+      _mpApplyPirateKill(data);
+    } else if (data.type === 'p_dmg') {
+      _mpApplyPirateDmg(data);
+    } else if (data.type === 'm_add') {
+      _mpApplyMineAdd(data.m);
+    } else if (data.type === 'm_exp') {
+      _mpApplyMineExplode(data);
+    } else if (data.type === 'b_add') {
+      _mpApplyBombAdd(data.b);
+    } else if (data.type === 'b_exp') {
+      _mpApplyBombExplode(data);
+    } else if (data.type === 'whale') {
+      _mpApplyWhale(data.w);
+    } else if (data.type === 'hydro') {
+      _mpApplyHydro(data.h);
     }
   });
   _mp.ws.addEventListener('close', () => {
@@ -13632,6 +13677,145 @@ function _mpApplyGarbageReset() {
     garbage.splice(i, 1);
   }
 }
+
+// --- Shared pirates (server-authoritative during PLAYING) ---
+// Scope of this increment: pirate positions + spawn/kill sync.
+// Whale / Hydronaute / mines / bombs remain local-per-client for now.
+function _mpBuildServerPirate(wire) {
+  const spawn = typeof findPirateSpawnPoint === 'function'
+    ? findPirateSpawnPoint() : { x: wire.x, z: wire.z };
+  const pirate = {
+    id: 'pirate_mp_' + wire.id,
+    serverId: wire.id | 0,
+    name: 'Navire Pirate',
+    x: +wire.x || 0, z: +wire.z || 0,
+    rotation: +wire.r || 0,
+    vx: 0, vz: 0,
+    targetId: null,
+    chaseTimer: 0,
+    bombTimer: 999999, // no local bomb logic
+    isFlagship: true,
+    health:    wire.h != null ? wire.h : 100,
+    maxHealth: 100,
+    lastHitTime: -999,
+    color: '#ff4444',
+    emerged: !!wire.e,
+    emergeTime: 0,
+    frozen: !wire.e,
+    diveTimer: 999999,
+    diving: false,
+    diveTimeLeft: 0,
+    _mpServer: true,
+  };
+  pirates.push(pirate);
+  // Attach the normal mesh so the existing render code paints it.
+  try {
+    let mesh;
+    if (typeof pirateModelTemplate !== 'undefined' && pirateModelTemplate) {
+      mesh = pirateModelTemplate.clone();
+      mesh.scale.setScalar(3.2);
+    } else if (typeof createProceduralPirate === 'function') {
+      mesh = createProceduralPirate();
+      mesh.scale.setScalar(1.5);
+    }
+    if (mesh) {
+      mesh.position.set(pirate.x, wire.e ? 0 : -30, pirate.z);
+      mesh.visible = !!wire.e;
+      scene.add(mesh);
+      if (typeof pirateMeshes !== 'undefined') pirateMeshes.set(pirate.id, mesh);
+    }
+  } catch (e) { /* mesh helpers may not be ready at very first snapshot */ }
+  return pirate;
+}
+function _mpApplyPirateAdd(wire) {
+  if (!wire || typeof pirates === 'undefined') return;
+  // Dedup by serverId
+  for (const p of pirates) { if (p.serverId === (wire.id | 0)) return; }
+  _mpBuildServerPirate(wire);
+}
+function _mpApplyPirateDmg(data) {
+  if (typeof pirates === 'undefined') return;
+  const sid = data.id | 0;
+  for (const p of pirates) {
+    if (p.serverId === sid) {
+      p.health = Math.max(0, data.h | 0);
+      p.lastHitTime = (typeof gameTime !== 'undefined') ? gameTime : 0;
+      break;
+    }
+  }
+}
+function _mpApplyPirateKill(data) {
+  if (typeof pirates === 'undefined') return;
+  const sid = data.id | 0;
+  for (let i = pirates.length - 1; i >= 0; i--) {
+    const p = pirates[i];
+    if (p.serverId !== sid) continue;
+    try {
+      if (typeof destroyPirate === 'function') {
+        destroyPirate(p);
+      } else {
+        const mesh = pirateMeshes && pirateMeshes.get(p.id);
+        if (mesh) scene.remove(mesh);
+        pirates.splice(i, 1);
+      }
+    } catch (e) { pirates.splice(i, 1); }
+    break;
+  }
+}
+function _mpApplyWorldSnap(data) {
+  // Wipe whatever we had and rebuild from server truth.
+  _mpApplyWorldReset();
+  if (Array.isArray(data.pirates)) for (const p of data.pirates) _mpApplyPirateAdd(p);
+  // Mines / bombs / whale / hydro snapshot fields are available but
+  // not consumed in this increment.
+}
+function _mpApplyWorldReset() {
+  if (typeof pirates !== 'undefined') {
+    for (let i = pirates.length - 1; i >= 0; i--) {
+      const p = pirates[i];
+      if (!p._mpServer) continue;
+      try {
+        const mesh = pirateMeshes && pirateMeshes.get(p.id);
+        if (mesh) scene.remove(mesh);
+      } catch (e) {}
+      pirates.splice(i, 1);
+    }
+  }
+}
+// Apply 20 Hz world poses inside the normal poses message.
+function _mpApplyWorldPoses(world) {
+  if (!world) return;
+  if (Array.isArray(world.p) && typeof pirates !== 'undefined') {
+    for (const wire of world.p) {
+      let found = null;
+      for (const p of pirates) { if (p.serverId === (wire.i | 0)) { found = p; break; } }
+      if (!found) { _mpBuildServerPirate({ id: wire.i, x: wire.x, z: wire.z, r: wire.r, h: wire.h, e: wire.e }); continue; }
+      // Smooth snap — server ticks at 20 Hz, render at 60 Hz; simple
+      // lerp covers the gap.
+      const k = 0.35;
+      found.x += (wire.x - found.x) * k;
+      found.z += (wire.z - found.z) * k;
+      let da = wire.r - found.rotation;
+      while (da >  Math.PI) da -= 2 * Math.PI;
+      while (da < -Math.PI) da += 2 * Math.PI;
+      found.rotation += da * k;
+      found.health = wire.h | 0;
+      found.emerged = !!wire.e;
+      found.frozen = !wire.e;
+      const mesh = pirateMeshes && pirateMeshes.get(found.id);
+      if (mesh) {
+        mesh.visible = found.emerged;
+      }
+    }
+  }
+}
+// Ignored in this increment — kept so the message dispatch table doesn't warn.
+function _mpApplyMineAdd(_m) {}
+function _mpApplyMineExplode(_d) {}
+function _mpApplyBombAdd(_b) {}
+function _mpApplyBombExplode(_d) {}
+function _mpApplyWhale(_w) {}
+function _mpApplyHydro(_h) {}
 
 // Victim sunk: respawn locally if we're the one sunk.
 function _mpApplySink(data) {
