@@ -12330,23 +12330,13 @@ function gameLoop(timestamp) {
   const _mpActive = !!(_mp.ws && _mp.ws.readyState === WebSocket.OPEN && _mp.roundLaunched);
   const _mpRemoteByBotId = new Map();
   const _mpHiddenBotIds  = new Set();
-  const _mpBotByBotId = new Map(); // localBotId -> server bot wire (from _mp.bots)
   if (_mpActive) {
     const rivals = [];
     for (const b of bots) { if (!b.isWhale && !b.isHydro) rivals.push(b); }
     const remotes = _mp.remoteBoats || [];
-    const serverBots = _mp.bots ? Array.from(_mp.bots.values()) : [];
-    // Remote humans get first dibs on rival slots, then server AI bots,
-    // remaining slots are hidden.
-    let slot = 0;
-    for (let i = 0; i < remotes.length && slot < rivals.length; i++, slot++) {
-      _mpRemoteByBotId.set(rivals[slot].id, remotes[i]);
-    }
-    for (let i = 0; i < serverBots.length && slot < rivals.length; i++, slot++) {
-      _mpBotByBotId.set(rivals[slot].id, serverBots[i]);
-    }
-    for (; slot < rivals.length; slot++) {
-      _mpHiddenBotIds.add(rivals[slot].id);
+    for (let i = 0; i < rivals.length; i++) {
+      if (i < remotes.length) _mpRemoteByBotId.set(rivals[i].id, remotes[i]);
+      else                    _mpHiddenBotIds.add(rivals[i].id);
     }
   }
   // Publish the mapping so _mpTrySendHit can consult it from anywhere.
@@ -12378,34 +12368,9 @@ function gameLoop(timestamp) {
       if (mesh && mesh.visible === false) mesh.visible = true;
     }
     const _mpRemote = _mpRemoteByBotId.get(bot.id);
-    const _mpBotWire = _mpBotByBotId.get(bot.id);
-    if (_mpRemote || _mpBotWire) {
+    if (_mpRemote) {
       const mesh = botMeshes.get(bot.id);
       if (mesh && mesh.visible === false) mesh.visible = true;
-    }
-    // AI bot slot: drive the local bot from the server's interpolated
-    // pose, skip movePlayer, set the label so it reads as an NPC.
-    if (_mpBotWire) {
-      const RENDER_DELAY_MS = 130;
-      const renderT = performance.now() - RENDER_DELAY_MS;
-      const span = Math.max(1, _mpBotWire.next.t - _mpBotWire.prev.t);
-      let alpha = (renderT - _mpBotWire.prev.t) / span;
-      if (alpha < 0) alpha = 0;
-      if (alpha > 1) alpha = 1;
-      const nx = _mpBotWire.prev.x + (_mpBotWire.next.x - _mpBotWire.prev.x) * alpha;
-      const nz = _mpBotWire.prev.z + (_mpBotWire.next.z - _mpBotWire.prev.z) * alpha;
-      let dr = _mpBotWire.next.rot - _mpBotWire.prev.rot;
-      while (dr > Math.PI)  dr -= 2 * Math.PI;
-      while (dr < -Math.PI) dr += 2 * Math.PI;
-      const nr = _mpBotWire.prev.rot + dr * alpha;
-      const vscale = 1000 / span;
-      bot.vx = (_mpBotWire.next.x - _mpBotWire.prev.x) * vscale;
-      bot.vz = (_mpBotWire.next.z - _mpBotWire.prev.z) * vscale;
-      bot.x = nx; bot.z = nz; bot.rotation = nr;
-      bot.totalCollected = _mpBotWire.score | 0;
-      bot.name = bot.name || 'IA';
-      addBoatWake(bot.id, bot.x, bot.z, bot.vx, bot.vz, RIPPLE_BOAT_AMP);
-      continue; // skip movePlayer + local AI for this slot
     }
     if (_mpRemote) {
       // Snapshot interpolation, render-behind style. We render the
@@ -13439,10 +13404,6 @@ const _mp = {
   // The entry id our *current alive* session is attached to, so
   // pickup broadcasts (`g_pick` with eid) can find the right row.
   myEntryId: -1,
-  // Server-driven AI bots — keyed by botId, interpolated like remote
-  // humans. Separate bucket so we can render them into spare rival
-  // slots without fighting seat indices.
-  bots: new Map(),        // botId -> { x, z, rot, score, prev, next, eid }
   wrEl:    null,
   wrTitle: null,
   wrTimer: null,
@@ -13594,7 +13555,6 @@ function _mpConnect() {
     } else if (data.type === 'poses' && Array.isArray(data.poses)) {
       _mpApplyPoses(data.poses);
       if (data.world) _mpApplyWorldPoses(data.world);
-      if (Array.isArray(data.bots)) _mpApplyBotPoses(data.bots);
     } else if (data.type === 'hit') {
       _mpApplyHit(data);
     } else if (data.type === 'sink') {
@@ -13866,7 +13826,6 @@ function _mpApplyGarbageAdd(data) {
 function _mpApplyGarbagePick(data) {
   const sid = data.id | 0;
   const seatIdx = data.by | 0;
-  const isBotPick = typeof data.bot === 'string' && data.bot.length > 0;
   // Remove the piece everywhere that knows about it.
   for (let i = 0; i < garbage.length; i++) {
     const g = garbage[i];
@@ -13893,15 +13852,9 @@ function _mpApplyGarbagePick(data) {
   // Server echoes the claimer's new score + health in the same message.
   // Mirror them onto our picture of that seat so the leaderboard is
   // instant (poses will confirm them again on the next tick).
-  if (!isBotPick && Array.isArray(_mp.seats) && _mp.seats[seatIdx] && _mp.seats[seatIdx].kind === 'human') {
+  if (Array.isArray(_mp.seats) && _mp.seats[seatIdx] && _mp.seats[seatIdx].kind === 'human') {
     if (typeof data.s === 'number') _mp.seats[seatIdx].score = data.s;
     if (typeof data.h === 'number') _mp.seats[seatIdx].health = data.h;
-  }
-  // Bot pick: update its cached score so the cohort-entry lookup below
-  // and the leaderboard see the new value immediately.
-  if (isBotPick && _mp.bots && _mp.bots.has(data.bot)) {
-    const b = _mp.bots.get(data.bot);
-    if (typeof data.s === 'number') b.score = data.s;
   }
   if (seatIdx === _mp.mySeatIdx && typeof localPlayer !== 'undefined') {
     if (typeof data.s === 'number') localPlayer.totalCollected = data.s;
@@ -14029,37 +13982,6 @@ function _mpApplyWorldReset() {
   }
 }
 // Apply 20 Hz world poses inside the normal poses message.
-// Server-driven AI bots — snapshot-interpolate so the 10 Hz stream
-// looks smooth at 60 fps, same as remote humans + pirate.
-function _mpApplyBotPoses(botWires) {
-  if (!_mp.bots) _mp.bots = new Map();
-  const nowMs = performance.now();
-  const seen = new Set();
-  for (const bw of botWires) {
-    seen.add(bw.i);
-    const latest = { x: +bw.x || 0, z: +bw.z || 0, rot: +bw.r || 0, t: nowMs };
-    const existing = _mp.bots.get(bw.i);
-    if (!existing) {
-      _mp.bots.set(bw.i, {
-        id: bw.i,
-        x: latest.x, z: latest.z, rot: latest.rot,
-        score: bw.s | 0,
-        eid: bw.eid | 0,
-        prev: latest,
-        next: latest,
-      });
-    } else {
-      existing.prev = existing.next;
-      existing.next = latest;
-      existing.score = bw.s | 0;
-      existing.eid = bw.eid | 0;
-    }
-  }
-  // Drop any bot the server no longer lists (session cycle + cleanup).
-  for (const key of _mp.bots.keys()) {
-    if (!seen.has(key)) _mp.bots.delete(key);
-  }
-}
 function _mpApplyWorldPoses(world) {
   if (!world) return;
   if (Array.isArray(world.p) && typeof pirates !== 'undefined') {

@@ -70,27 +70,11 @@ type Seat =
 // a Web Worker to escape throttling) survive a transient hiccup.
 const GHOST_TIMEOUT_MS = 15_000;
 
-// Always-on AI captain. Lives on the server, wanders the ocean, picks
-// up plastic just like a real player, gets a SessionEntry row, and
-// respawns with a fresh entry every 3 min. Keeps the ocean feeling
-// lived-in even when no humans are connected and guarantees at least
-// a couple of rivals on the leaderboard.
-type Bot = {
-  botId: string;               // unique wire id, e.g. "npc_0"
-  name: string;
-  color: string;
-  x: number;
-  z: number;
-  rot: number;
-  targetX: number;             // current wander destination
-  targetZ: number;
-  targetGarbageId: number | null;
-  pickCooldownAt: number;      // epoch ms — throttles rapid re-picks
-  sessionStartedAt: number;
-  sessionEndedAt: number | null;
-  currentEntryId: number;
-  score: number;
-};
+// NOTE: server-side AI bots were removed after a first attempt — the
+// rough-and-ready wander logic looked "crazy" compared to the
+// polished solo-mode bot. If we bring bots back, port the solo-mode
+// AI (see PlasticFury-v2/src/game/botAI.ts) to the server so the
+// behavior matches, rather than writing a fresh one here.
 
 type Garbage = {
   id: number;         // short numeric id, keeps wire tiny
@@ -186,15 +170,7 @@ const MAX_SEATS           = 50;   // target concurrent player cap — expand as 
 const MAX_HEALTH_SERVER   = 100;  // match client MAX_HEALTH
 const HIT_INVULN_MS       = 700;  // match client INVULN_AFTER_HIT (0.7s)
 
-// --- AI captains ---
-const BOT_COUNT           = 2;     // always-on AI bots, independent of humans
-const BOT_NAMES           = ["Coral", "Marlin"];
-const BOT_COLORS          = ["#4ade80", "#a78bfa"];
-const BOT_SPEED           = 9;     // world-units / s — slightly slower than humans
-const BOT_PICKUP_RADIUS   = 2.2;   // bot needs to get close enough to claim a piece
-const BOT_PICKUP_COOLDOWN_MS = 180; // anti-spam cap
-const BOT_RETARGET_CHANCE = 0.01;  // per-tick chance to pick a new wander point
-const BOT_TARGET_RETIRE_MS = 6000; // if bot can't reach target in 6s, give up
+// (AI bot constants removed with the bots themselves.)
 
 // Shared garbage field. Keep the counts modest so the per-tick wire
 // + initial snapshot stay cheap.
@@ -280,11 +256,6 @@ export default class TrashureRoom implements Party.Server {
   private entries: SessionEntry[] = [];
   private entryNextId = 1;
 
-  // --- AI bot captains ---
-  // Always-on NPC boats. Created once per room lifetime; their
-  // `sessionStartedAt` cycles every 3 min (old SessionEntry freezes,
-  // new one created — just like humans hitting Rejoin).
-  private bots: Bot[] = [];
 
   constructor(readonly room: Party.Room) {
     this.state = initialState();
@@ -573,12 +544,10 @@ export default class TrashureRoom implements Party.Server {
 
   private startTicker() {
     if (this.tickTimer) return;
-    this.ensureBots();
     this.tickTimer = setInterval(() => {
       this.tick();
       this.tickGarbage(TICK_MS);
       this.tickWorld(TICK_MS);
-      this.tickBots(TICK_MS);
       this.broadcastIfPlaying();
     }, TICK_MS);
   }
@@ -587,12 +556,6 @@ export default class TrashureRoom implements Party.Server {
       clearInterval(this.tickTimer);
       this.tickTimer = null;
     }
-    // Freeze + drop the AI bots so a fresh room starts clean. Their
-    // entries get pruned naturally once no witness is left.
-    for (const b of this.bots) {
-      if (b.sessionEndedAt === null) this.endEntry(b.currentEntryId, Date.now());
-    }
-    this.bots.length = 0;
   }
 
   // --- SESSION ENTRIES ---
@@ -707,159 +670,6 @@ export default class TrashureRoom implements Party.Server {
     this.entries = this.entries.filter(e =>
       e.sessionEndedAt === null || (e.sessionEndedAt as number) >= cutoff
     );
-  }
-
-  // --- BOTS ---
-  // Create the two always-on AI captains if they don't exist yet.
-  // Called from startTicker() so they come alive as soon as the first
-  // human arrives (and vanish with the ticker when everyone leaves).
-  private ensureBots() {
-    if (this.bots.length >= BOT_COUNT) return;
-    const now = Date.now();
-    for (let i = this.bots.length; i < BOT_COUNT; i++) {
-      const botId = "npc_" + i;
-      const name  = BOT_NAMES[i % BOT_NAMES.length];
-      const color = BOT_COLORS[i % BOT_COLORS.length];
-      const spawn = this.pickBotSpawn();
-      const entry = this.createBotEntry(botId, name, color, now);
-      this.bots.push({
-        botId, name, color,
-        x: spawn.x, z: spawn.z,
-        rot: Math.random() * Math.PI * 2,
-        targetX: spawn.x, targetZ: spawn.z,
-        targetGarbageId: null,
-        pickCooldownAt: 0,
-        sessionStartedAt: now,
-        sessionEndedAt: null,
-        currentEntryId: entry.entryId,
-        score: 0,
-      });
-    }
-  }
-
-  private pickBotSpawn() {
-    const a = Math.random() * Math.PI * 2;
-    const r = GARBAGE_ISLAND_PAD + 10 + Math.random() * 40;
-    return { x: Math.cos(a) * r, z: Math.sin(a) * r };
-  }
-
-  // Entries for bots use a synthetic pid + seatIdx=-1 so they sit on
-  // the leaderboard alongside humans without occupying a real seat.
-  private createBotEntry(botId: string, name: string, color: string, now: number): SessionEntry {
-    const e: SessionEntry = {
-      entryId: this.entryNextId++,
-      seatIdx: -1,
-      pid: "bot:" + botId,
-      name, color,
-      sessionStartedAt: now,
-      sessionEndedAt: null,
-      score: 0,
-    };
-    this.entries.push(e);
-    this.broadcastEntryAdd(e);
-    return e;
-  }
-
-  // Per-tick AI: steer toward a wander point (or the nearest piece of
-  // plastic if one is in range), auto-pick any garbage we bump into,
-  // and cycle the SessionEntry every SESSION_MS.
-  private tickBots(dtMs: number) {
-    if (this.bots.length === 0) return;
-    const now = Date.now();
-    const dt = dtMs / 1000;
-    for (const b of this.bots) {
-      // Session lifecycle — same 3-min rhythm as humans.
-      if (now >= b.sessionStartedAt + SESSION_MS) {
-        this.endEntry(b.currentEntryId, now);
-        const entry = this.createBotEntry(b.botId, b.name, b.color, now);
-        b.sessionStartedAt = now;
-        b.currentEntryId = entry.entryId;
-        b.score = 0;
-        const spawn = this.pickBotSpawn();
-        b.x = spawn.x; b.z = spawn.z;
-        b.targetGarbageId = null;
-      }
-
-      // Target acquisition — nearest unclaimed piece within ~50 units,
-      // or wander to a random point.
-      if (b.targetGarbageId !== null) {
-        const g = this.garbage.find(x => x.id === b.targetGarbageId);
-        if (!g || g.claimed) b.targetGarbageId = null;
-      }
-      if (b.targetGarbageId === null && Math.random() < 0.5) {
-        let bestId = -1, bestD2 = 50 * 50;
-        for (const g of this.garbage) {
-          if (g.claimed) continue;
-          const dx = g.x - b.x, dz = g.z - b.z;
-          const d2 = dx * dx + dz * dz;
-          if (d2 < bestD2) { bestD2 = d2; bestId = g.id; }
-        }
-        if (bestId !== -1) b.targetGarbageId = bestId;
-      }
-      if (b.targetGarbageId !== null) {
-        const g = this.garbage.find(x => x.id === b.targetGarbageId);
-        if (g) { b.targetX = g.x; b.targetZ = g.z; }
-      } else {
-        // Wander: pick a new destination occasionally or once we've
-        // roughly reached the current one.
-        const dxW = b.targetX - b.x, dzW = b.targetZ - b.z;
-        if (dxW * dxW + dzW * dzW < 4 || Math.random() < BOT_RETARGET_CHANCE) {
-          const w = this.pickBotSpawn();
-          b.targetX = w.x; b.targetZ = w.z;
-        }
-      }
-
-      // Steering: turn toward target, move forward.
-      const dx = b.targetX - b.x, dz = b.targetZ - b.z;
-      const wantA = Math.atan2(dx, dz);
-      let diff = wantA - b.rot;
-      while (diff >  Math.PI) diff -= 2 * Math.PI;
-      while (diff < -Math.PI) diff += 2 * Math.PI;
-      b.rot += Math.max(-1, Math.min(1, diff)) * dt * 2.0;
-      b.x += Math.sin(b.rot) * BOT_SPEED * dt;
-      b.z += Math.cos(b.rot) * BOT_SPEED * dt;
-
-      // Clamp inside the world ring.
-      const d = Math.hypot(b.x, b.z);
-      if (d > GARBAGE_WORLD_RADIUS) {
-        b.x = (b.x / d) * GARBAGE_WORLD_RADIUS;
-        b.z = (b.z / d) * GARBAGE_WORLD_RADIUS;
-      }
-      if (d < GARBAGE_ISLAND_PAD) {
-        const a = Math.atan2(b.z, b.x) || 0;
-        b.x = Math.cos(a) * (GARBAGE_ISLAND_PAD + 1);
-        b.z = Math.sin(a) * (GARBAGE_ISLAND_PAD + 1);
-      }
-
-      // Pickup: auto-claim any piece within BOT_PICKUP_RADIUS.
-      if (now >= b.pickCooldownAt) {
-        for (const g of this.garbage) {
-          if (g.claimed) continue;
-          const gdx = g.x - b.x, gdz = g.z - b.z;
-          if (gdx * gdx + gdz * gdz <= BOT_PICKUP_RADIUS * BOT_PICKUP_RADIUS) {
-            g.claimed = true;
-            const idx = this.garbage.indexOf(g);
-            if (idx !== -1) this.garbage.splice(idx, 1);
-            const pts = ((g as any).points | 0) || 1;
-            b.score += pts;
-            const entry = this.entries.find(e => e.entryId === b.currentEntryId);
-            if (entry) entry.score = b.score;
-            // Broadcast the pick so every client removes the mesh +
-            // plays the +N floater. `by` is -1 to mean "not a seat";
-            // `bot` carries the bot id so the client can route the
-            // score update (and eid so the leaderboard row ticks).
-            this.room.broadcast(JSON.stringify({
-              type: "g_pick", id: g.id, by: -1, bot: b.botId,
-              k: g.kind, s: b.score, p: pts,
-              eid: b.currentEntryId,
-            }));
-            b.pickCooldownAt = now + BOT_PICKUP_COOLDOWN_MS;
-            if (b.targetGarbageId === g.id) b.targetGarbageId = null;
-            break;
-          }
-        }
-      }
-    }
   }
 
   // ---- lifecycle ----
@@ -1378,16 +1188,6 @@ export default class TrashureRoom implements Party.Server {
       z: Math.round(this.hydro.z * 100) / 100,
       r: Math.round(this.hydro.rot * 1000) / 1000,
     };
-    // AI bots ride in their own bucket so clients can key them off the
-    // stable botId string instead of fighting seat indices.
-    const botPoses = this.bots.map(b => ({
-      i: b.botId,
-      x: Math.round(b.x * 100) / 100,
-      z: Math.round(b.z * 100) / 100,
-      r: Math.round(b.rot * 1000) / 1000,
-      s: b.score | 0,
-      eid: b.currentEntryId,
-    }));
     // Skip the send if nothing changed since last tick. Rough hash
     // is cheap and catches the common "everybody standing still"
     // case after respawn / lobby.
@@ -1396,11 +1196,10 @@ export default class TrashureRoom implements Party.Server {
     if (world.p) for (const p of world.p) hashParts.push('P' + p.i + ':' + p.x + ',' + p.z + ',' + p.r + ',' + p.h + ',' + p.e);
     if (world.w) hashParts.push('W' + world.w.x + ',' + world.w.z + ',' + world.w.s);
     if (world.h) hashParts.push('H' + world.h.x + ',' + world.h.z);
-    for (const b of botPoses) hashParts.push('B' + b.i + ':' + b.x + ',' + b.z + ',' + b.r + ',' + b.s);
     const hash = hashParts.join('|');
     if (hash === this.lastPoseHash) return;
     this.lastPoseHash = hash;
-    this.room.broadcast(JSON.stringify({ type: "poses", poses, world, bots: botPoses }));
+    this.room.broadcast(JSON.stringify({ type: "poses", poses, world }));
   }
 
   // ---- helpers ----
