@@ -257,6 +257,16 @@ export default class TrashureRoom implements Party.Server {
         seat.x = x; seat.z = z; seat.rot = r;
       }
       seat.boosting = !!data.b;
+      // Self-reported health for non-combat damage (pirates, mines,
+      // island). Combat damage still flows through the authoritative
+      // 'hit' path, so we only trust self-report to *lower* health —
+      // never to heal. If a client sends a higher number than we
+      // already have, we ignore it (heals happen server-side via
+      // pink pickups).
+      if (typeof data.h === "number" && Number.isFinite(data.h)) {
+        const reported = Math.max(0, Math.min(seat.maxHealth, data.h | 0));
+        if (reported < seat.health) seat.health = reported;
+      }
       return;
     }
 

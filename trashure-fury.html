@@ -13317,6 +13317,13 @@ function _mpStartBoatUploader() {
           z: +localPlayer.z.toFixed(2),
           rot: +((localPlayer.rotation || 0).toFixed(3)),
           b: boosting ? 1 : 0,
+          // Self-reported health so the other client's display of us
+          // reflects damage from local-only sources (pirate bombs,
+          // mines, island collisions). Hit events from player-vs-
+          // player combat still go through the authoritative server
+          // path so scores can't be spoofed by a captain lying about
+          // their HP.
+          h: Math.max(0, Math.min(100, Math.round(localPlayer.health | 0))),
         }));
       } catch (e) {}
     };
