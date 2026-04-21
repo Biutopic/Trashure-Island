@@ -5287,6 +5287,17 @@ function tryShootFireball(chargeTime, alreadyPaid) {
   fireballs.push(fb);
   addFireballMesh(fb);
   sfx.bombLaunch(bow.x, bow.z);
+  // Broadcast the fireball spawn so other players see it flying too.
+  if (_mp && _mp.ws && _mp.ws.readyState === WebSocket.OPEN && _mp.roundLaunched) {
+    try {
+      _mp.ws.send(JSON.stringify({
+        type: 'fire',
+        x: +bow.x.toFixed(2), y: +bow.y.toFixed(2), z: +bow.z.toFixed(2),
+        vx: +fb.vx.toFixed(2), vz: +fb.vz.toFixed(2),
+        charge: +t.toFixed(2),
+      }));
+    } catch (e) {}
+  }
   _tutStats.hasFired = true;
   _tutStats.lastFireTime = gameTime;
 }
@@ -13334,6 +13345,8 @@ function _mpConnect() {
       _mpApplyHit(data);
     } else if (data.type === 'sink') {
       _mpApplySink(data);
+    } else if (data.type === 'fire') {
+      _mpApplyFire(data);
     }
   });
   _mp.ws.addEventListener('close', () => {
@@ -13421,6 +13434,36 @@ function _mpApplyHit(data) {
       }
     }
   }
+}
+
+// Another player fired a fireball — spawn a VISUAL-ONLY copy locally
+// so we see it flying across our screen. Collision + damage are still
+// routed through the separate 'hit' event, so these remote fireballs
+// have no damage logic here — they just move, render, and fade.
+function _mpApplyFire(data) {
+  if (typeof fireballs === 'undefined' || typeof addFireballMesh !== 'function') return;
+  if (data.attacker === _mp.mySeatIdx) return; // don't double-spawn our own
+  const t = Math.max(0, Math.min(1, +data.charge || 0));
+  const id = 'fb_remote_' + (Date.now() + Math.random());
+  const fb = {
+    id,
+    x: +data.x || 0, y: +data.y || 2, z: +data.z || 0,
+    vx: +data.vx || 0, vz: +data.vz || 0,
+    damage: 0,                      // no damage from remote-visual fireballs
+    radius: (typeof FIRE_MIN_RADIUS !== 'undefined')
+      ? FIRE_MIN_RADIUS + (FIRE_MAX_RADIUS - FIRE_MIN_RADIUS) * t
+      : 1 + t,
+    blastRadius: (typeof FIRE_BLAST_MIN !== 'undefined')
+      ? FIRE_BLAST_MIN + (FIRE_BLAST_MAX - FIRE_BLAST_MIN) * t
+      : 3 + t * 2,
+    life: (typeof FIRE_LIFETIME !== 'undefined') ? FIRE_LIFETIME : 3.5,
+    shooterId: 'remote_' + data.attacker,
+    charge: t,
+    remoteVisual: true,             // collision/damage loop skips this
+  };
+  fireballs.push(fb);
+  addFireballMesh(fb);
+  try { sfx.bombLaunch(fb.x, fb.z); } catch (e) {}
 }
 
 // Victim sunk: respawn locally if we're the one sunk.

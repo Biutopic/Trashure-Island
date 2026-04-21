@@ -194,6 +194,27 @@ export default class TrashureRoom implements Party.Server {
       return;
     }
 
+    // Fireball spawn: attacker client fires locally, we just relay the
+    // spawn pose to everyone else so they can render a visual-only
+    // fireball. Damage still rides through the 'hit' event.
+    if (data.type === "fire") {
+      const attackerSeat = this.findSeatByConn(conn.id);
+      if (!attackerSeat || attackerSeat.kind !== "human") return;
+      const attackerIdx = this.state.seats.indexOf(attackerSeat);
+      const out = {
+        type: "fire",
+        attacker: attackerIdx,
+        x: Number(data.x) || 0,
+        y: Number(data.y) || 0,
+        z: Number(data.z) || 0,
+        vx: Number(data.vx) || 0,
+        vz: Number(data.vz) || 0,
+        charge: Math.max(0, Math.min(1, Number(data.charge) || 0)),
+      };
+      this.room.broadcast(JSON.stringify(out), [conn.id]); // skip sender
+      return;
+    }
+
     // Hit event: an attacker client detected a ram / fireball landing
     // on a remote-driven slot. We validate server-side (invuln window,
     // target alive, target is actually a human), deduct health, and
