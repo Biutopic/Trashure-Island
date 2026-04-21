@@ -314,6 +314,63 @@
       align-items: stretch;
     }
     .start-row > #start-btn { flex: 1 1 auto; }
+
+    /* Three-mode launcher grid: online / local split-screen / solo.
+       Stacks vertically for readability; the primary mode (online)
+       stands out with a brighter gradient. */
+    .start-mode-grid {
+      display: flex; flex-direction: column; gap: 10px;
+      margin-top: 6px;
+    }
+    .start-mode-btn {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      grid-template-rows: auto auto;
+      gap: 2px 14px;
+      align-items: center;
+      padding: 14px 18px;
+      background: rgba(12, 28, 48, 0.85);
+      border: 1px solid rgba(120, 180, 220, 0.35);
+      border-radius: 10px;
+      color: #e8f3ff;
+      font-family: var(--font-heading);
+      text-align: left;
+      cursor: pointer;
+      transition: transform 0.18s, box-shadow 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .start-mode-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 180, 220, 0.28);
+      border-color: rgba(160, 220, 255, 0.6);
+      background: rgba(18, 38, 62, 0.92);
+    }
+    .start-mode-btn .start-mode-ico {
+      grid-row: 1 / span 2;
+      font-size: 1.6rem;
+      line-height: 1;
+      text-align: center;
+    }
+    .start-mode-btn .start-mode-text {
+      font-size: 1.05rem; font-weight: 900; letter-spacing: 2.5px;
+    }
+    .start-mode-btn .start-mode-sub {
+      font-family: var(--font-body);
+      font-size: 0.7rem;
+      color: rgba(200, 225, 245, 0.7);
+      letter-spacing: 0.3px;
+    }
+    /* Primary (online) — bright gradient to signal the default choice. */
+    .start-mode-btn.primary {
+      background: linear-gradient(135deg, #00ffdd 0%, #00c8ff 55%, #e8c356 100%);
+      color: #0a1628; border-color: transparent;
+      box-shadow: 0 4px 18px rgba(0, 200, 200, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+    .start-mode-btn.primary .start-mode-sub { color: rgba(10, 22, 40, 0.72); }
+    .start-mode-btn.primary:hover {
+      transform: translateY(-3px) scale(1.01);
+      box-shadow: 0 10px 34px rgba(0, 220, 200, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
     #tutorial-btn {
       flex: 0 0 auto;
       padding: 18px 22px;
@@ -1739,11 +1796,29 @@
 
     <div class="start-label" data-i18n="name_label">Nom du Capitaine</div>
     <input type="text" id="name-input" placeholder="Entre ton nom..." maxlength="16" value="Capitaine" data-i18n-placeholder="name_placeholder">
+    <div class="start-mode-grid">
+      <button class="start-mode-btn primary" id="start-btn-online" onclick="if(window._beginGame)window._beginGame()">
+        <span class="start-mode-ico">&#x1F30D;</span>
+        <span class="start-mode-text" data-i18n="start_mode_online">EN LIGNE</span>
+        <span class="start-mode-sub" data-i18n="start_mode_online_sub">Capitaines du monde entier</span>
+      </button>
+      <button class="start-mode-btn" id="start-btn-split" onclick="if(window._beginSplit)window._beginSplit()">
+        <span class="start-mode-ico">&#x1F3AE;</span>
+        <span class="start-mode-text" data-i18n="start_mode_split">MULTI LOCAL</span>
+        <span class="start-mode-sub" data-i18n="start_mode_split_sub">Jusqu'&agrave; 4 sur un m&ecirc;me &eacute;cran</span>
+      </button>
+      <button class="start-mode-btn" id="start-btn-solo" onclick="if(window._beginSolo)window._beginSolo()">
+        <span class="start-mode-ico">&#x1F6A2;</span>
+        <span class="start-mode-text" data-i18n="start_mode_solo">SOLO</span>
+        <span class="start-mode-sub" data-i18n="start_mode_solo_sub">Contre des bots, hors ligne</span>
+      </button>
+    </div>
     <div class="start-row">
-      <button id="start-btn" onclick="if(window._beginGame)window._beginGame()" data-i18n="start_btn">LARGUER LES AMARRES</button>
       <button id="tutorial-btn" onclick="if(window._openTutorial)window._openTutorial()" data-i18n="tuto_btn">TUTORIEL</button>
     </div>
-    <a id="start-solo-link" href="#" onclick="event.preventDefault(); if(window._beginSolo)window._beginSolo();" data-i18n="start_solo_link">Jouer hors ligne (solo)</a>
+    <!-- Legacy anchor kept for any direct link that used it; the three
+         mode buttons above are the real entry points now. -->
+    <button id="start-btn" style="display:none" onclick="if(window._beginGame)window._beginGame()" data-i18n="start_btn" aria-hidden="true">LARGUER LES AMARRES</button>
   </div>
 </div>
 
@@ -14295,6 +14370,45 @@ function beginSolo() {
 window._beginSolo = beginSolo;
 
 // ============================================================
+// Split-screen (local multi) — Phase 1: menu button is live, engine
+// is not. Clicking shows a "coming soon" toast so players know the
+// slot exists without hitting a broken code path. Phase 2 will wire
+// this to the real multi-viewport launcher.
+// ============================================================
+function beginSplit() {
+  // Guarded so this doesn't blow up if i18n hasn't finished loading.
+  const title = (typeof tr === 'function') ? tr('split_soon_title') : 'Coming soon';
+  const body  = (typeof tr === 'function') ? tr('split_soon_body')
+    : 'Four-player split-screen is on the way.';
+  // Cheap inline banner instead of a full modal — keeps the menu clean
+  // and matches the codebase's existing "no modal system" style.
+  let el = document.getElementById('split-soon-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'split-soon-banner';
+    el.style.cssText = [
+      'position:fixed', 'z-index:9999', 'left:50%', 'top:24%',
+      'transform:translateX(-50%)',
+      'max-width:380px', 'padding:16px 20px',
+      'background:rgba(12,28,48,0.95)',
+      'border:1px solid rgba(160,220,255,0.55)',
+      'border-radius:12px',
+      'color:#e8f3ff', 'font-family:var(--font-body)',
+      'box-shadow:0 12px 40px rgba(0,0,0,0.5)',
+      'text-align:center', 'line-height:1.35',
+    ].join(';');
+    document.body.appendChild(el);
+  }
+  el.innerHTML =
+    '<div style="font-family:var(--font-heading);font-size:1rem;letter-spacing:2px;margin-bottom:6px;color:#ffd080;">'
+    + title.replace(/</g, '&lt;') + '</div>'
+    + '<div style="font-size:0.85rem;">' + body.replace(/</g, '&lt;') + '</div>';
+  clearTimeout(beginSplit._t);
+  beginSplit._t = setTimeout(() => { el && el.remove(); }, 4500);
+}
+window._beginSplit = beginSplit;
+
+// ============================================================
 // Soft rejoin — restart a personal 3-min session without reloading.
 // Triggered by the gameover overlay's "REJOUER" button and fired
 // automatically on session_end if the player wants a quick reset.
@@ -15215,6 +15329,15 @@ const I18N_STRINGS = {
     wr_hint_playing: 'Une manche est en cours. Tu joueras \u00E0 la prochaine.',
     wr_hint_recap: 'R\u00E9cap de la manche en cours. Prochaine manche dans un instant.',
     start_solo_link: 'Jouer hors ligne (solo)',
+    start_mode_online:     'EN LIGNE',
+    start_mode_online_sub: 'Capitaines du monde entier',
+    start_mode_split:      'MULTI LOCAL',
+    start_mode_split_sub:  'Jusqu\u2019\u00E0 4 sur un m\u00EAme \u00E9cran',
+    start_mode_solo:       'SOLO',
+    start_mode_solo_sub:   'Contre des bots, hors ligne',
+    split_soon_title:      'Bient\u00F4t disponible',
+    split_soon_body:       'Le mode 4 joueurs sur un m\u00EAme \u00E9cran arrive. En attendant, lance une partie en ligne ou en solo.',
+    split_soon_close:      'OK',
     wr_seat_human: 'Humain',
     wr_seat_bot: 'Bot',
     wr_seat_open: 'Si\u00E8ge libre',
@@ -15334,6 +15457,15 @@ const I18N_STRINGS = {
     wr_hint_playing: 'A round is in progress. You\u2019ll join the next one.',
     wr_hint_recap: 'Round recap in progress. Next round starts shortly.',
     start_solo_link: 'Play offline (solo)',
+    start_mode_online:     'ONLINE',
+    start_mode_online_sub: 'Captains from around the world',
+    start_mode_split:      'LOCAL MULTI',
+    start_mode_split_sub:  'Up to 4 on the same screen',
+    start_mode_solo:       'SOLO',
+    start_mode_solo_sub:   'Versus bots, offline',
+    split_soon_title:      'Coming soon',
+    split_soon_body:       'Four-player split-screen is on the way. In the meantime, try online or solo.',
+    split_soon_close:      'OK',
     wr_seat_human: 'Human',
     wr_seat_bot: 'Bot',
     wr_seat_open: 'Seat open',
