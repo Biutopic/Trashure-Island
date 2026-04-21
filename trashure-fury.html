@@ -4063,6 +4063,12 @@ function applyCollision(a, b, now) {
     // Boosting winner deals heavy damage. NO plastic loss, NO HP
     // transfer — collisions just hurt the loser. Winner neither heals
     // nor gains cargo. Pure damage trade.
+    //
+    // MP note: this collision was detected on THIS client's ticks,
+    // but the other client may not see the same overlap due to 100 ms
+    // of interpolation lag. The hit routes through the server which
+    // echoes the damage to everyone, so symmetry is guaranteed even
+    // if only one side detected the overlap.
     if (!_mpTrySendHit(loser, dmg, 'ram')) {
       loser.health -= dmg;
       loser.lastHitTime = now;
@@ -13627,12 +13633,27 @@ function _mpApplySink(data) {
 // caller can damage normally (pirates, bots, etc.).
 function _mpTrySendHit(victim, dmg, source) {
   if (!victim || !_mp || !_mp.ws || _mp.ws.readyState !== WebSocket.OPEN) return false;
-  if (!_mp.roundLaunched) return false;
-  if (!_mp.remoteBoats || _mp.remoteBoats.length === 0) return false;
+  // Don't require roundLaunched — a client that reloaded mid-round
+  // or joined late may not have seen a clean COUNTDOWN->PLAYING
+  // transition yet, even though the server is PLAYING.
+  if (_mp.phase !== 'PLAYING') return false;
   // victim may be the localPlayer (e.g. pirate hits me) — those never route.
   if (!victim.id || victim.id === 'local') return false;
-  if (!_mp._remoteByBotId) return false;
-  const rb = _mp._remoteByBotId.get(victim.id);
+  // First try the game-loop-built Map (fast path).
+  let rb = null;
+  if (_mp._remoteByBotId) rb = _mp._remoteByBotId.get(victim.id);
+  // Fallback: compute the seat mapping from scratch. Handles the case
+  // where the game loop hasn't rebuilt the map yet this frame (first
+  // hit of a round can happen before the first bot-update pass).
+  if (!rb && Array.isArray(_mp.remoteBoats) && _mp.remoteBoats.length) {
+    const rivals = [];
+    if (typeof bots !== 'undefined') {
+      for (const b of bots) { if (!b.isWhale && !b.isHydro) rivals.push(b); }
+    }
+    for (let i = 0; i < rivals.length && i < _mp.remoteBoats.length; i++) {
+      if (rivals[i].id === victim.id) { rb = _mp.remoteBoats[i]; break; }
+    }
+  }
   if (!rb) return false;
   try {
     _mp.ws.send(JSON.stringify({
