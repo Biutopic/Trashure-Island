@@ -34,7 +34,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Write PartyKit credentials
+      - name: Deploy to PartyKit
         env:
           PARTYKIT_LOGIN: ${{ secrets.PARTYKIT_LOGIN }}
           PARTYKIT_TOKEN: ${{ secrets.PARTYKIT_TOKEN }}
@@ -43,19 +43,7 @@ jobs:
             echo "::error::PARTYKIT_LOGIN and PARTYKIT_TOKEN must be set as repo secrets."
             exit 1
           fi
-          # Mimic the file `npx partykit login` produces locally. Modern
-          # partykit CLIs read credentials from ~/.partykit/config.json
-          # rather than environment variables, so we materialise that
-          # file here from the repo secrets.
-          mkdir -p "$HOME/.partykit"
-          printf '%s' "{\"login\":\"$PARTYKIT_LOGIN\",\"access_token\":\"$PARTYKIT_TOKEN\",\"type\":\"github\"}" > "$HOME/.partykit/config.json"
-          chmod 600 "$HOME/.partykit/config.json"
-          # Print ONLY that the file exists + its size — never the token.
-          echo "Wrote ~/.partykit/config.json ($(wc -c < "$HOME/.partykit/config.json") bytes)"
-
-      - name: Deploy to PartyKit
-        run: npx --yes partykit@latest deploy
-
-      - name: Clean up credentials
-        if: always()
-        run: rm -f "$HOME/.partykit/config.json"
+          # partykit CLI reads PARTYKIT_LOGIN + PARTYKIT_TOKEN from env
+          # directly. This shape was confirmed working in run #3
+          # (commit f80bde6). Keep it simple.
+          npx --yes partykit@latest deploy
