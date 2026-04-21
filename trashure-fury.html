@@ -4403,9 +4403,9 @@ function spawnDeathExplosion(x, z) {
 }
 
 function regenHealth(player, now, dt, upgrades) {
-  if (player.health < MAX_HEALTH && now - player.lastHitTime > HEALTH_REGEN_DELAY) {
-    player.health = Math.min(MAX_HEALTH, player.health + HEALTH_REGEN_RATE * dt);
-  }
+  // Passive regen disabled by design: pink plastic is the only way
+  // to heal. Damage accumulates until sink, which makes hits meaningful
+  // and pink pickups valuable.
 }
 
 // ============================================================
