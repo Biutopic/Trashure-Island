@@ -13657,10 +13657,10 @@ function _mpBuildGarbageFromServer(item) {
     size   = garbageFBXMeshes[fbxIdx].size;
     points = garbageFBXMeshes[fbxIdx].points;
   }
-  // Server-authoritative points override (death-drop pieces are 5).
-  if (typeof item.p === 'number' && item.p > 1) {
+  // Server-authoritative points override for death-drop pieces (1/2/3).
+  // Size stays normal — they're regular-looking plastic, just worth more.
+  if (typeof item.p === 'number' && item.p > 0) {
     points = item.p | 0;
-    size   = 'large';
   }
   return {
     id: 'gs_' + item.id,          // client id prefixed for mesh registry uniqueness

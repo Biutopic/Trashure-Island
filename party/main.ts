@@ -650,16 +650,21 @@ export default class TrashureRoom implements Party.Server {
     // sinker once they respawn) can scoop them. Also drops the
     // sinker's score by the same amount.
     if (data.type === "sink_drop" && seat?.kind === "human") {
-      // Client tells us the sinker's current score. We drop ~25% of it
-      // as big 5-point pieces scattered near the death point, capped by
-      // MAX_DEATH_DROP so chain deaths don't flood.
+      // Drop ~25% of the sinker's score as normal-looking plastic
+      // pieces with mixed point values (1, 2, or 3) so the total sums
+      // close to the target. Capped by MAX_DEATH_DROP piece count so
+      // a chain of deaths doesn't flood the ocean.
       const score = Math.max(0, Math.min(9999, Number(data.score) || 0));
-      const POINTS_PER_PIECE = 5;
-      const wantPts = Math.floor(score * 0.25);
+      let wantPts = Math.floor(score * 0.25);
       if (wantPts <= 0) return;
-      const pieceCount = Math.min(MAX_DEATH_DROP, Math.max(1, Math.ceil(wantPts / POINTS_PER_PIECE)));
       const items: Array<{ id: number; x: number; z: number; k: 0 | 1; p?: number }> = [];
-      for (let i = 0; i < pieceCount && this.garbage.length < MAX_GARBAGE; i++) {
+      while (wantPts > 0 && items.length < MAX_DEATH_DROP && this.garbage.length < MAX_GARBAGE) {
+        // Prefer bigger chunks while there's lots of plastic left to
+        // distribute, taper down to 1-pt pieces at the tail.
+        let pts: number;
+        if (wantPts >= 3 && Math.random() < 0.5)      pts = 3;
+        else if (wantPts >= 2 && Math.random() < 0.5) pts = 2;
+        else                                           pts = 1;
         const a = Math.random() * Math.PI * 2;
         const r = 2 + Math.random() * 6;
         const g: any = {
@@ -668,16 +673,16 @@ export default class TrashureRoom implements Party.Server {
           z: Math.round((seat.z + Math.sin(a) * r) * 100) / 100,
           kind: 0,
           claimed: false,
-          points: POINTS_PER_PIECE,
+          points: pts,
         };
         this.garbage.push(g);
-        items.push({ id: g.id, x: g.x, z: g.z, k: 0, p: POINTS_PER_PIECE });
+        items.push({ id: g.id, x: g.x, z: g.z, k: 0, p: pts });
+        wantPts -= pts;
       }
       if (items.length) {
         this.room.broadcast(JSON.stringify({ type: "g_add", items }));
       }
-      // Deduct from the sinker's score equal to what got dropped.
-      const dropped = items.length * POINTS_PER_PIECE;
+      const dropped = items.reduce((s, it) => s + (it.p || 1), 0);
       seat.score = Math.max(0, seat.score - dropped);
       return;
     }
