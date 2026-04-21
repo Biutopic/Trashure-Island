@@ -13507,6 +13507,16 @@ window._beginSolo = beginSolo;
 // The original local-only startup path. We keep it as-is and wrap it
 // in beginGame() which routes through the lobby first.
 function _beginLocalRound() {
+  // Second+ round on the same page? Scores, garbage, bot AI, pirates
+  // all carry over which makes numbers balloon into nonsense (saw
+  // Marlin at 7523 plastic). A clean page reload wipes it. Our pid
+  // is preserved in sessionStorage so the reconnect lands in the
+  // same lobby.
+  if (typeof gameStarted !== 'undefined' && gameStarted) {
+    try { if (_mp.ws) _mp.ws.close(); } catch (e) {}
+    location.reload();
+    return;
+  }
   localPlayer.name = nameInput.value.trim() || 'Capitaine';
   // In online multiplayer, put each player at a unique spawn corner
   // keyed off their seat index so boats don't stack on top of each
