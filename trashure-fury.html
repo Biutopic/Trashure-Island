@@ -1602,8 +1602,8 @@
     body.split-iframe #controls-hint,
     body.split-iframe #hydro-hud,
     body.split-iframe #repo-guide,
-    body.split-iframe #upgrade-meter,
-    body.split-iframe #fireball-meter,
+    body.split-iframe #upgrade-progress,
+    body.split-iframe #fireball-progress,
     body.split-iframe #tips-display,
     body.split-iframe #combo-display,
     body.split-iframe #fireball-unlock-banner,
@@ -14467,10 +14467,27 @@ window._beginSolo = beginSolo;
         return;
       }
       if (d.type === 'pose' && d.me !== me) {
-        window.__tiSplit.others.set(d.me, {
-          x: d.x, z: d.z, rot: d.rot, health: d.health, score: d.score,
-          at: performance.now(),
-        });
+        const nowMs = performance.now();
+        const latest = { x: d.x, z: d.z, rot: d.rot, t: nowMs };
+        const prev = window.__tiSplit.others.get(d.me);
+        if (!prev) {
+          // First sighting — seed both prev and next so the first
+          // render frame has something to interpolate between.
+          window.__tiSplit.others.set(d.me, {
+            prev: latest, next: latest,
+            health: d.health | 0, score: d.score | 0,
+          });
+        } else {
+          // Advance the ring buffer: old "next" becomes "prev", new
+          // packet becomes "next". Pattern matches the online
+          // snapshot-interpolation code in _mpApplyPoses so remote
+          // boats glide between server ticks instead of snapping
+          // every 100ms (was the "saccadé" stutter the user saw).
+          prev.prev = prev.next;
+          prev.next = latest;
+          prev.health = d.health | 0;
+          prev.score = d.score | 0;
+        }
       }
     };
   }
@@ -14599,6 +14616,30 @@ window._beginSolo = beginSolo;
       }
     } catch (e) {}
     if (!m) return null;
+    // Deep-clone every material the cloned GLTF inherited from the
+    // shared template. Without this, the remote hull shares its
+    // MeshStandardMaterial with the local boat and ends up looking
+    // translucent / wrong as the solo engine mutates the shared
+    // material (emissive, opacity, etc.) each frame. Mirrors the
+    // material-clone pass that makePlayerMesh() does for the P1
+    // boat.
+    m.traverse((c) => {
+      if (c.isMesh && c.material) {
+        const mats = Array.isArray(c.material) ? c.material : [c.material];
+        const cloned = mats.map((mat) => {
+          const nm = mat.clone();
+          if (nm.emissive) {
+            nm.emissive = new THREE.Color(0x2a2420);
+            nm.emissiveIntensity = 1.0;
+          }
+          nm.transparent = false;
+          nm.opacity = 1.0;
+          nm.depthWrite = true;
+          return nm;
+        });
+        c.material = Array.isArray(c.material) ? cloned : cloned[0];
+      }
+    });
     m.position.set(0, 0.8, 0);
     scene.add(m);
     _tiRemoteMeshes.set(player, m);
@@ -14623,20 +14664,44 @@ window._beginSolo = beginSolo;
     const others = window.__tiSplit.others;
     if (!others || others.size === 0) return;
     if (typeof getWaveHeight !== 'function' || typeof gameTime === 'undefined') return;
-    for (const [player, pose] of others.entries()) {
+    // One-tick render-behind delay gives us a safe window to
+    // interpolate between the last two known poses without
+    // extrapolating (which is what produces rubber-band visuals
+    // under jitter). 130ms = 1 publish tick (100ms) + a 30ms
+    // cushion; same value the online code uses.
+    const RENDER_DELAY_MS = 130;
+    const renderT = performance.now() - RENDER_DELAY_MS;
+    for (const [player, cache] of others.entries()) {
       const m = _tiEnsureRemoteMesh(player);
-      if (!m) continue;
-      const wy = getWaveHeight(pose.x, pose.z, gameTime);
-      m.position.set(pose.x, wy + 0.5, pose.z);
-      m.rotation.order = 'YXZ';
-      // Mirror the same base rotation the local boat uses so the
-      // cloned template faces forward instead of sideways.
+      if (!m || !cache.prev || !cache.next) continue;
+      const span = Math.max(1, cache.next.t - cache.prev.t);
+      let alpha = (renderT - cache.prev.t) / span;
+      if (alpha < 0) alpha = 0;
+      if (alpha > 1) alpha = 1;
+      const ix = cache.prev.x + (cache.next.x - cache.prev.x) * alpha;
+      const iz = cache.prev.z + (cache.next.z - cache.prev.z) * alpha;
+      // Angle lerp with wrap-around so a boat spinning past PI
+      // doesn't rotate the long way around.
+      let dr = cache.next.rot - cache.prev.rot;
+      while (dr >  Math.PI) dr -= 2 * Math.PI;
+      while (dr < -Math.PI) dr += 2 * Math.PI;
+      const irot = cache.prev.rot + dr * alpha;
+      // Bobbing + tilt — match the solo boat math so the remote
+      // captain rises and rolls on the same waves as the local
+      // player (without it, their hull looks like it's floating
+      // above flat water while the local boat bobs).
+      const wy = getWaveHeight(ix, iz, gameTime);
+      const tilt = (typeof getWaveTilt === 'function')
+        ? getWaveTilt(ix, iz, gameTime)
+        : { tiltX: 0, tiltZ: 0 };
       const baseYRot = -Math.PI / 2;
-      m.rotation.set(0, pose.rot + baseYRot, 0);
+      m.position.set(ix, wy + 0.8, iz);
+      m.rotation.order = 'YXZ';
+      m.rotation.set(tilt.tiltX, irot + baseYRot, tilt.tiltZ);
       // Project the hull position to screen and place the label.
       const lbl = _tiRemoteLabels.get(player);
       if (lbl && typeof camera !== 'undefined' && typeof renderer !== 'undefined') {
-        const v = new THREE.Vector3(pose.x, wy + 3.4, pose.z);
+        const v = new THREE.Vector3(ix, wy + 3.4, iz);
         v.project(camera);
         const canvas = renderer.domElement;
         if (v.z < 1) {
