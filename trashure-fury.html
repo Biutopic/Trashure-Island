@@ -1591,6 +1591,29 @@
 
     /* ---- BEGINNER TIPS ---- */
     /* ---- RADAR (bottom-right, marine-radar style) ---- */
+    /* Split-screen iframe mode: hide every overlay that the shell
+       already owns (single shared timer + leaderboard at the edges
+       of the outer page) or that clutters a half-width viewport. Each
+       iframe keeps its own HUD panel (health / energy / plastic),
+       its own world, and its own follow camera — nothing else. */
+    body.split-iframe #timer-display,
+    body.split-iframe #leaderboard,
+    body.split-iframe #radar-hud,
+    body.split-iframe #controls-hint,
+    body.split-iframe #hydro-hud,
+    body.split-iframe #repo-guide,
+    body.split-iframe #upgrade-meter,
+    body.split-iframe #fireball-meter,
+    body.split-iframe #tips-display,
+    body.split-iframe #combo-display,
+    body.split-iframe #fireball-unlock-banner,
+    body.split-iframe #fire-crosshair { display: none !important; }
+    /* P2 iframe: flip the HUD panel to the right edge so that, once
+       the shell places P1 on the left and P2 on the right, each
+       player's HUD hugs the outer edge of the screen (closest to
+       their own quadrant) instead of dead-center. */
+    body.split-iframe-p2 #hud { left: auto; right: 20px; }
+
     #radar-hud {
       position: fixed; bottom: 18px; right: 18px;
       width: 184px; height: 184px;
@@ -14396,12 +14419,14 @@ window._beginSolo = beginSolo;
   const me = Math.max(1, Math.min(4, parseInt(qs.get('player') || '1', 10)));
   window.__tiSplit = { enabled: true, me, isAuthority: (me === 1), others: new Map() };
 
-  // Hide the menu / back button UI inside the iframe — the shell owns
-  // the back button. Also suppress the auto-connect online logic by
-  // short-circuiting _mpConnect, since we're in local-only mode.
+  // Body class lets CSS (see #radar-hud block) hide the HUD widgets
+  // that now live on the shell (timer, leaderboard, controls hint,
+  // REPO guide, Hydro panel, upgrade sidebar) so the two iframes just
+  // show the world + their own left/right HUD panel.
   document.addEventListener('DOMContentLoaded', () => {
     const ss = document.getElementById('start-screen');
     if (ss) ss.hidden = true;
+    document.body.classList.add('split-iframe', 'split-iframe-p' + me);
   });
   // Prevent the in-iframe online code from reaching out to a server —
   // split-screen is strictly local. Override after the function is
@@ -14411,47 +14436,90 @@ window._beginSolo = beginSolo;
     window._mpConnect = () => {};
   }, 0);
 
-  // Shell routes keys to us. Translate incoming postMessages into
-  // mutations of the global `input` object — the same object the
-  // regular keydown handler would touch.
-  window.addEventListener('message', (ev) => {
-    const d = ev.data;
-    if (!d || d.type !== 'tiSplitKey') return;
-    if (typeof input === 'undefined') return;
-    const action = d.action;
-    if (action === 'forward' || action === 'backward' ||
-        action === 'left'    || action === 'right'    ||
-        action === 'boost') {
-      input[action] = !!d.pressed;
-    }
-  });
-
-  // BroadcastChannel sync — each iframe shares the same window /
-  // process but the channel is the clean pub/sub layer across them.
-  // See _tiSplitTick below for how we pump boat-pose messages out.
-  try {
-    const ch = new BroadcastChannel('ti-split');
-    window.__tiSplit.ch = ch;
+  // Input routing via BroadcastChannel — the shell and both iframes
+  // post to the same 'ti-split' channel, so keyboard events are
+  // captured once (by whichever window has focus) and all three
+  // receive them. This sidesteps the "only the focused iframe gets
+  // keys" limitation and lets both players mash their keys at the
+  // same time. We only mutate `input` when the message is addressed
+  // to us (d.player === me).
+  let ch = null;
+  try { ch = new BroadcastChannel('ti-split'); } catch (e) {}
+  window.__tiSplit.ch = ch;
+  if (ch) {
     ch.onmessage = (ev) => {
       const d = ev.data;
-      if (!d || d.me === me) return; // ignore our own broadcasts
-      if (d.type === 'pose') {
-        // Cache the remote boat pose so the renderer can draw it as
-        // a second boat in this iframe's scene. Filled in by the
-        // renderer hook installed below in the game loop.
+      if (!d) return;
+      if (d.type === 'input' && d.player === me) {
+        if (typeof input === 'undefined') return;
+        if (d.action === 'forward' || d.action === 'backward' ||
+            d.action === 'left'    || d.action === 'right'    ||
+            d.action === 'boost') {
+          input[d.action] = !!d.pressed;
+        }
+        return;
+      }
+      if (d.type === 'pose' && d.me !== me) {
         window.__tiSplit.others.set(d.me, {
           x: d.x, z: d.z, rot: d.rot, health: d.health, score: d.score,
           at: performance.now(),
         });
       }
     };
-  } catch (e) { /* BroadcastChannel unavailable; we'll just run solo */ }
+  }
+  // Capture keyboard locally too and rebroadcast — the focused
+  // iframe's window sees the keydown first; pushing it into the
+  // channel lets the other iframe + the shell see it as well.
+  const P1_KEYS = {
+    KeyW: 'forward', KeyS: 'backward', KeyA: 'left', KeyD: 'right', Space: 'boost',
+  };
+  const P2_KEYS = {
+    ArrowUp: 'forward', ArrowDown: 'backward',
+    ArrowLeft: 'left', ArrowRight: 'right', Enter: 'boost',
+  };
+  function _tiIframeKey(ev, pressed) {
+    let player = 0, action = null;
+    if (ev.code in P1_KEYS) { player = 1; action = P1_KEYS[ev.code]; }
+    else if (ev.code in P2_KEYS) { player = 2; action = P2_KEYS[ev.code]; }
+    if (!player) return;
+    if (ch) {
+      try { ch.postMessage({ type: 'input', player, action, pressed }); } catch (e) {}
+    }
+    ev.preventDefault();
+  }
+  window.addEventListener('keydown', (ev) => _tiIframeKey(ev, true),  true);
+  window.addEventListener('keyup',   (ev) => _tiIframeKey(ev, false), true);
 
-  // Auto-start: wait for the normal game-start pipeline to be ready,
-  // then click the (hidden) solo button so the scene boots without
-  // the player having to interact. Polls because the game bootstraps
-  // asynchronously and beginSolo is only defined once the main script
-  // block runs.
+  // P2: mute music so we don't stack two copies of the main theme.
+  // SFX stay active on both iframes so each player hears feedback
+  // from their own actions (bumps, pickups, crank, etc.). We monkey-
+  // patch the music start/loop helpers to no-op on P2.
+  if (me !== 1) {
+    const _muteLoopHelpers = () => {
+      const names = ['startThemeMusic', 'stopThemeMusic',
+                     'updateThemeMusic', 'startEndgameTheme',
+                     'stopEndgameTheme', 'startOceanAmbient',
+                     'stopOceanAmbient', 'startMotorLoop',
+                     'stopMotorLoop', 'updateMotorLoop'];
+      for (const n of names) {
+        if (typeof window[n] === 'function') window[n] = () => {};
+      }
+      // Also null out any <audio> the game has already constructed so
+      // it can't play even if the bootstrapping code reads directly.
+      const kill = (name) => {
+        try { if (window[name] && window[name].pause) { window[name].pause(); window[name].volume = 0; } } catch (e) {}
+      };
+      kill('themeAudio'); kill('themeMainAudio'); kill('themePirateAudio');
+      kill('themeEndgameAudio'); kill('oceanAmbientAudio'); kill('motorAudio');
+    };
+    // The audio functions are defined in the main inline script, so
+    // they only exist after DOMContentLoaded-plus. Try twice.
+    setTimeout(_muteLoopHelpers, 0);
+    setTimeout(_muteLoopHelpers, 1500);
+  }
+
+  // Auto-start the solo round once the boot code finishes defining
+  // _beginSolo. We poll because initialization is asynchronous.
   const tryStart = () => {
     if (typeof window._beginSolo === 'function') {
       try { window._beginSolo(); } catch (e) {}
@@ -14461,10 +14529,8 @@ window._beginSolo = beginSolo;
   };
   setTimeout(tryStart, 250);
 
-  // Pose broadcaster — runs on an interval (10 Hz), publishes our
-  // own boat pose to the channel so the other iframe(s) can render
-  // us. Kept cheap: plain numbers, no serialization of the whole
-  // player object. The renderer consumes __tiSplit.others.
+  // Pose broadcaster — 10 Hz, shape matches the online protocol so
+  // we could later reuse the server-side interpolation code.
   setInterval(() => {
     if (!window.__tiSplit || !window.__tiSplit.ch) return;
     if (typeof localPlayer === 'undefined' || !localPlayer) return;
@@ -14480,6 +14546,24 @@ window._beginSolo = beginSolo;
       });
     } catch (e) {}
   }, 100);
+
+  // Timer publisher — only P1 (authority) runs this. Broadcasts the
+  // remaining session time so the shell can paint its single shared
+  // timer pill. P2 suppresses its own clock to avoid two sources of
+  // truth.
+  if (me === 1) {
+    setInterval(() => {
+      if (!window.__tiSplit || !window.__tiSplit.ch) return;
+      if (typeof gameTimeRemaining === 'undefined') return;
+      const total = Math.max(0, Math.floor(gameTimeRemaining));
+      const mm = Math.floor(total / 60);
+      const ss = total % 60;
+      const display = String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+      try {
+        window.__tiSplit.ch.postMessage({ type: 'timer', total, display });
+      } catch (e) {}
+    }, 500);
+  }
 })();
 
 // ============================================================

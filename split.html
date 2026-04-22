@@ -9,9 +9,10 @@
      iframes of trashure-fury.html side by side. Each iframe runs the
      full, working solo game — same engine, same boat pose, same
      camera, pixel-identical to the single-player experience. The
-     shell routes keyboard input to the right iframe via postMessage,
-     and the iframes sync their world state over a BroadcastChannel
-     (see ti-split channel usage below). */
+     shell hosts a single shared timer + leaderboard at the top so
+     the two iframes don't each show their own copy. World sync, key
+     routing and timer/score updates all flow over a single
+     BroadcastChannel named 'ti-split'. */
   html, body {
     margin: 0; padding: 0; width: 100%; height: 100%;
     background: #000; overflow: hidden;
@@ -31,26 +32,8 @@
     border: 0; display: block;
     background: #000;
   }
-  /* Back-to-menu pill — tucked into the top-center so it doesn't
-     overlap either player's HUD. Clicking unloads the iframes and
-     returns to the main menu. */
-  #split-back {
-    position: fixed;
-    top: 10px; left: 50%;
-    transform: translateX(-50%);
-    z-index: 20;
-    padding: 6px 14px;
-    font-family: 'Orbitron', monospace;
-    font-size: 0.75rem; letter-spacing: 2px;
-    color: #d7ecf7;
-    background: rgba(10, 22, 40, 0.85);
-    border: 1px solid rgba(160, 220, 255, 0.45);
-    border-radius: 20px;
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-  }
-  #split-back:hover { border-color: rgba(200, 240, 255, 0.8); }
-  /* Player label pill — shows P1 / P2 at the top of each quadrant. */
+  /* Player tag pills — P1 top-left, P2 top-right. Pure labels, no
+     interaction. */
   .player-tag {
     position: fixed;
     top: 10px;
@@ -63,12 +46,75 @@
   }
   #tag-p1 { left: 16px;  background: linear-gradient(135deg, #00ffdd, #00c8ff); }
   #tag-p2 { right: 16px; background: linear-gradient(135deg, #ffd93d, #ff9a3c); }
+
+  /* Shared timer — one copy for both players, centered at the top. */
+  #shell-timer {
+    position: fixed;
+    top: 10px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    min-width: 140px;
+    padding: 10px 22px;
+    text-align: center;
+    font-family: 'Orbitron', monospace;
+    font-size: 1.6rem; font-weight: 900; letter-spacing: 4px;
+    color: #00ffdd;
+    background: rgba(10, 22, 40, 0.88);
+    border: 1px solid rgba(0, 220, 220, 0.45);
+    border-radius: 12px;
+    text-shadow: 0 0 14px rgba(0, 255, 220, 0.4);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+  }
+
+  /* Shared leaderboard — bottom-center so it doesn't overlap the HUDs
+     each iframe still paints on its own left/right edge. */
+  #shell-leaderboard {
+    position: fixed;
+    bottom: 12px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    min-width: 320px; max-width: 560px;
+    padding: 8px 14px;
+    background: rgba(10, 22, 40, 0.88);
+    border: 1px solid rgba(120, 180, 220, 0.45);
+    border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+  }
+  #shell-leaderboard .lb-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.7rem; letter-spacing: 3px;
+    color: rgba(200, 225, 245, 0.75);
+    text-align: center;
+    margin-bottom: 4px;
+  }
+  #shell-leaderboard .lb-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 3px 8px;
+    font-size: 0.78rem;
+  }
+  #shell-leaderboard .lb-row + .lb-row { margin-top: 2px; }
+  #shell-leaderboard .lb-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex: 0 0 auto;
+    box-shadow: 0 0 6px currentColor;
+  }
+  #shell-leaderboard .lb-name { flex: 1; }
+  #shell-leaderboard .lb-score {
+    color: #00ffdd; font-weight: 800;
+    font-family: 'Orbitron', monospace;
+  }
 </style>
 </head>
 <body>
   <div class="player-tag" id="tag-p1">P1 · ZQSD + Espace</div>
   <div class="player-tag" id="tag-p2">P2 · Flèches + Entrée</div>
-  <button id="split-back">&larr; RETOUR AU MENU</button>
+  <div id="shell-timer">--:--</div>
+  <div id="shell-leaderboard">
+    <div class="lb-title">CLASSEMENT</div>
+    <div id="shell-lb-rows"></div>
+  </div>
   <div id="split-grid">
     <iframe id="frame-p1" src="trashure-fury.html?split=1&player=1" allow="autoplay; gamepad"></iframe>
     <iframe id="frame-p2" src="trashure-fury.html?split=1&player=2" allow="autoplay; gamepad"></iframe>
@@ -77,17 +123,20 @@
 <script>
 (() => {
   // =================================================================
-  // Split-screen shell — key routing only. World sync happens via
-  // BroadcastChannel INSIDE each iframe (see the ti-split handler in
-  // trashure-fury.html). The shell itself stays thin; its only
-  // responsibility is turning global keyboard events into postMessages
-  // to the right iframe so each player drives their own boat.
+  // Split-screen shell
+  // -----------------------------------------------------------------
+  // Thin coordinator on top of two iframes. Responsibilities:
+  //   1. Broadcast keystrokes to the right player — via the shared
+  //      'ti-split' BroadcastChannel so focus doesn't matter (whichever
+  //      window has focus captures the key and relays it to the other
+  //      two via the channel).
+  //   2. Render a single shared timer + leaderboard so both players
+  //      see one copy (each iframe hides its own; see the split
+  //      hook inside trashure-fury.html for the CSS class that does
+  //      the stripping).
+  //   3. Keep the score/time state in sync with whatever P1 (the
+  //      authority iframe) publishes each frame.
   // =================================================================
-  const frameP1 = document.getElementById('frame-p1');
-  const frameP2 = document.getElementById('frame-p2');
-  // Which keys belong to which player. Mirrors the split-screen
-  // binding plan: P1 on the left-hand side of the keyboard, P2 on
-  // the arrow cluster.
   const P1_KEYS = {
     KeyW: 'forward',  KeyS: 'backward',
     KeyA: 'left',     KeyD: 'right',
@@ -100,36 +149,71 @@
     ArrowRight: 'right',
     Enter:      'boost',
   };
+
+  // BroadcastChannel-based input routing — the shell, P1 iframe, and
+  // P2 iframe all post the same message shape to the channel and each
+  // subscriber decides what to do with it. Crucially this means the
+  // keyboard listener doesn't care which window had focus when the
+  // key was pressed.
+  let ch = null;
+  try { ch = new BroadcastChannel('ti-split'); } catch (e) {}
+
   function routeKey(ev, pressed) {
-    // Check P1 first — if the code matches, forward to iframe P1.
-    if (ev.code in P1_KEYS) {
-      frameP1.contentWindow.postMessage({
-        type: 'tiSplitKey',
-        action: P1_KEYS[ev.code],
-        pressed,
-      }, '*');
-      ev.preventDefault();
-      return;
+    let player = 0, action = null;
+    if (ev.code in P1_KEYS) { player = 1; action = P1_KEYS[ev.code]; }
+    else if (ev.code in P2_KEYS) { player = 2; action = P2_KEYS[ev.code]; }
+    if (!player) return;
+    if (ch) {
+      try { ch.postMessage({ type: 'input', player, action, pressed }); } catch (e) {}
     }
-    if (ev.code in P2_KEYS) {
-      frameP2.contentWindow.postMessage({
-        type: 'tiSplitKey',
-        action: P2_KEYS[ev.code],
-        pressed,
-      }, '*');
-      ev.preventDefault();
-      return;
-    }
+    ev.preventDefault();
   }
   window.addEventListener('keydown', (ev) => routeKey(ev, true),  true);
   window.addEventListener('keyup',   (ev) => routeKey(ev, false), true);
 
-  // Back button — blow away the iframes and navigate home. The
-  // BroadcastChannel inside each iframe closes automatically when the
-  // iframe unloads, so no cleanup needed here.
-  document.getElementById('split-back').addEventListener('click', () => {
-    location.href = 'trashure-fury.html';
-  });
+  // Shared UI state — driven by the authority iframe (P1). P1
+  // broadcasts its own score + P2's last known score + the remaining
+  // session time each UI tick.
+  const timerEl = document.getElementById('shell-timer');
+  const rowsEl  = document.getElementById('shell-lb-rows');
+  let entries = []; // [{ player, name, color, score }]
+
+  function renderLeaderboard() {
+    entries.sort((a, b) => b.score - a.score);
+    let html = '';
+    for (const e of entries) {
+      html += '<div class="lb-row">'
+        + '<span class="lb-dot" style="color:' + e.color + ';background:' + e.color + '"></span>'
+        + '<span class="lb-name">' + e.name + '</span>'
+        + '<span class="lb-score">' + e.score + '</span>'
+        + '</div>';
+    }
+    rowsEl.innerHTML = html;
+  }
+
+  function upsertEntry(player, patch) {
+    let e = entries.find(x => x.player === player);
+    if (!e) {
+      e = { player, name: 'Capitaine ' + player, color: player === 1 ? '#00ffdd' : '#ffd93d', score: 0 };
+      entries.push(e);
+    }
+    if (patch.name != null)  e.name  = patch.name;
+    if (patch.color != null) e.color = patch.color;
+    if (patch.score != null) e.score = patch.score;
+    renderLeaderboard();
+  }
+
+  if (ch) {
+    ch.onmessage = (ev) => {
+      const d = ev.data;
+      if (!d) return;
+      if (d.type === 'pose' && typeof d.me === 'number') {
+        upsertEntry(d.me, { score: d.score | 0 });
+      } else if (d.type === 'timer') {
+        timerEl.textContent = d.display || '--:--';
+      }
+    };
+  }
 })();
 </script>
 </body>
