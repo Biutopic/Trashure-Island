@@ -13540,10 +13540,15 @@ function _mpGrabEls() {
 }
 
 function _mpConnect() {
-  // Always-on world: we no longer pop a waiting-room lobby. We grab
-  // the element refs so legacy helpers don't NPE, but the room never
-  // becomes visible — the local round launches as soon as the server
-  // confirms our seat (via the first state message).
+  // Online mode is parked — the entire MP code path is dormant while
+  // we focus on solo. Returning here means no WebSocket is ever
+  // opened, even if a stale cached call slips through (e.g. an
+  // earlier deploy left this function reachable from somewhere we
+  // missed). Two browsers can no longer end up in the same room
+  // because no browser ever connects.
+  console.log('[Trashure] _mpConnect() called but online is parked — skipping');
+  return;
+  // (legacy code below kept dormant for the eventual online return)
   _mpGrabEls();
   if (_mp.wrEl) {
     _mp.wrEl.classList.remove('active');
@@ -14304,9 +14309,23 @@ function _mpLeave() {
 // "Jouer hors ligne" link on the start screen AND the "Jouer en solo"
 // button inside the lobby for impatient solo players.
 function beginSolo() {
+  console.log('[Trashure] beginSolo — full offline reset');
+  // Forcibly nuke every piece of MP state so a stale cached path
+  // can't resurrect online behavior (no server connection, no
+  // remote players, no MP-suppressed bots, no early pirate spawn).
   try { if (_mp.ws) _mp.ws.close(); } catch (e) {}
   _mp.ws = null;
+  _mp.roundLaunched = false;
+  _mp.phase = 'LOBBY';
+  _mp.seats = [];
+  _mp.remoteBoats = [];
+  _mp.entries = [];
+  _mp.mySeatIdx = -1;
+  _mp.isSpectator = false;
+  _mp.selfReady = false;
   if (_mp.reconnectTimer) { clearTimeout(_mp.reconnectTimer); _mp.reconnectTimer = null; }
+  if (_mp.pingWorker) { try { _mp.pingWorker.terminate(); } catch (e) {} _mp.pingWorker = null; }
+  if (_mp.boatUpWorker) { try { _mp.boatUpWorker.terminate(); } catch (e) {} _mp.boatUpWorker = null; }
   _mpHideWaitingRoom();
   _beginLocalRound();
 }
