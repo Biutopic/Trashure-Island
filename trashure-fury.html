@@ -1105,6 +1105,19 @@
       padding-bottom: 2px;
     }
     #start-solo-link:hover { color: #ffd080; border-bottom-color: #ffd080; }
+    /* Footer hint inside the start panel: multiplayer modes are
+       parked while we focus on solo. The button code paths
+       (_beginGame, _beginSplit) stay alive for when the experiences
+       are ready to surface again. */
+    #start-coming-soon {
+      margin-top: 14px;
+      font-family: var(--font-body);
+      font-size: 0.72rem;
+      font-style: italic;
+      color: rgba(180, 220, 255, 0.55);
+      text-align: center;
+      letter-spacing: 0.4px;
+    }
     #waiting-room .wr-hint {
       font-size: 0.78rem; color: rgba(180, 210, 230, 0.7);
       max-width: 520px; text-align: center;
@@ -1740,10 +1753,15 @@
     <div class="start-label" data-i18n="name_label">Nom du Capitaine</div>
     <input type="text" id="name-input" placeholder="Entre ton nom..." maxlength="16" value="Capitaine" data-i18n-placeholder="name_placeholder">
     <div class="start-row">
-      <button id="start-btn" onclick="if(window._beginGame)window._beginGame()" data-i18n="start_btn">LARGUER LES AMARRES</button>
+      <!-- LARGUER LES AMARRES launches solo directly while online +
+           split-screen multiplayer are parked. _beginGame and
+           _beginSplit stay defined elsewhere in the page so the
+           code paths can be re-surfaced once the multiplayer
+           experiences are ready. -->
+      <button id="start-btn" onclick="if(window._beginSolo)window._beginSolo()" data-i18n="start_btn">LARGUER LES AMARRES</button>
       <button id="tutorial-btn" onclick="if(window._openTutorial)window._openTutorial()" data-i18n="tuto_btn">TUTORIEL</button>
     </div>
-    <a id="start-solo-link" href="#" onclick="event.preventDefault(); if(window._beginSolo)window._beginSolo();" data-i18n="start_solo_link">Jouer hors ligne (solo)</a>
+    <div id="start-coming-soon" data-i18n="start_coming_soon">Multijoueur (en ligne et &eacute;cran partag&eacute;) : bient&ocirc;t disponible</div>
   </div>
 </div>
 
@@ -15215,6 +15233,7 @@ const I18N_STRINGS = {
     wr_hint_playing: 'Une manche est en cours. Tu joueras \u00E0 la prochaine.',
     wr_hint_recap: 'R\u00E9cap de la manche en cours. Prochaine manche dans un instant.',
     start_solo_link: 'Jouer hors ligne (solo)',
+    start_coming_soon: 'Multijoueur (en ligne et &eacute;cran partag&eacute;) : bient\u00F4t disponible',
     wr_seat_human: 'Humain',
     wr_seat_bot: 'Bot',
     wr_seat_open: 'Si\u00E8ge libre',
@@ -15334,6 +15353,7 @@ const I18N_STRINGS = {
     wr_hint_playing: 'A round is in progress. You\u2019ll join the next one.',
     wr_hint_recap: 'Round recap in progress. Next round starts shortly.',
     start_solo_link: 'Play offline (solo)',
+    start_coming_soon: 'Multiplayer (online and split-screen): coming soon',
     wr_seat_human: 'Human',
     wr_seat_bot: 'Bot',
     wr_seat_open: 'Seat open',
