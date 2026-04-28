@@ -14447,7 +14447,12 @@ function beginGame() {
 }
 
 startBtn.addEventListener('click', beginGame);
-nameInput.addEventListener('keydown', (e) => { if (e.code === 'Enter') beginGame(); });
+// Enter key inside the name field launches the same mode as the
+// LARGUER LES AMARRES button — solo, while online MP is parked.
+// (Was beginGame, which auto-connected to the PartyKit server even
+// though the visible button was wired to solo. That's how two
+// browsers ended up seeing each other in the leaderboard.)
+nameInput.addEventListener('keydown', (e) => { if (e.code === 'Enter') beginSolo(); });
 // Global fallback for onclick attribute
 window._beginGame = beginGame;
 
@@ -14625,9 +14630,11 @@ function closeTutorial() {
 }
 function nextTutoStep() {
   if (_tutoIndex >= _tutorialSteps.length - 1) {
-    // Last step's "Start" button launches the game directly.
+    // Last step's "Start" button launches the game directly. Solo
+    // mode while online MP is parked — was beginGame which connected
+    // to the server even from the tutorial flow.
     closeTutorial();
-    if (typeof beginGame === 'function') beginGame();
+    if (typeof beginSolo === 'function') beginSolo();
     return;
   }
   _tutoIndex++;
