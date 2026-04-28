@@ -314,75 +314,6 @@
       align-items: stretch;
     }
     .start-row > #start-btn { flex: 1 1 auto; }
-
-    /* Three-mode launcher grid: online / local split-screen / solo.
-       Stacks vertically for readability; the primary mode (online)
-       stands out with a brighter gradient. */
-    .start-mode-grid {
-      display: flex; flex-direction: column; gap: 10px;
-      margin-top: 6px;
-    }
-    .start-mode-btn {
-      width: 100%;
-      display: grid;
-      grid-template-columns: 42px 1fr;
-      grid-template-rows: auto auto;
-      gap: 2px 14px;
-      align-items: center;
-      padding: 14px 18px;
-      background: rgba(12, 28, 48, 0.85);
-      border: 1px solid rgba(120, 180, 220, 0.35);
-      border-radius: 10px;
-      color: #e8f3ff;
-      font-family: var(--font-heading);
-      text-align: left;
-      cursor: pointer;
-      transition: transform 0.18s, box-shadow 0.2s, border-color 0.2s, background 0.2s;
-    }
-    .start-mode-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0, 180, 220, 0.28);
-      border-color: rgba(160, 220, 255, 0.6);
-      background: rgba(18, 38, 62, 0.92);
-    }
-    .start-mode-btn .start-mode-ico {
-      grid-row: 1 / span 2;
-      font-size: 1.6rem;
-      line-height: 1;
-      text-align: center;
-    }
-    .start-mode-btn .start-mode-text {
-      font-size: 1.05rem; font-weight: 900; letter-spacing: 2.5px;
-    }
-    .start-mode-btn .start-mode-sub {
-      font-family: var(--font-body);
-      font-size: 0.7rem;
-      color: rgba(200, 225, 245, 0.7);
-      letter-spacing: 0.3px;
-    }
-    /* Primary (online) — bright gradient to signal the default choice. */
-    .start-mode-btn.primary {
-      background: linear-gradient(135deg, #00ffdd 0%, #00c8ff 55%, #e8c356 100%);
-      color: #0a1628; border-color: transparent;
-      box-shadow: 0 4px 18px rgba(0, 200, 200, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-    }
-    .start-mode-btn.primary .start-mode-sub { color: rgba(10, 22, 40, 0.72); }
-    .start-mode-btn.primary:hover {
-      transform: translateY(-3px) scale(1.01);
-      box-shadow: 0 10px 34px rgba(0, 220, 200, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-    }
-    /* Footer hint inside the start panel: signals that multiplayer
-       modes are on the roadmap without putting a broken button on
-       the page. Sits below the JOUER + TUTORIEL row. */
-    #start-coming-soon {
-      margin-top: 14px;
-      font-family: var(--font-body);
-      font-size: 0.72rem;
-      font-style: italic;
-      color: rgba(180, 220, 255, 0.55);
-      text-align: center;
-      letter-spacing: 0.4px;
-    }
     #tutorial-btn {
       flex: 0 0 auto;
       padding: 18px 22px;
@@ -1603,29 +1534,6 @@
 
     /* ---- BEGINNER TIPS ---- */
     /* ---- RADAR (bottom-right, marine-radar style) ---- */
-    /* Split-screen iframe mode: hide every overlay that the shell
-       already owns (single shared timer + leaderboard at the edges
-       of the outer page) or that clutters a half-width viewport. Each
-       iframe keeps its own HUD panel (health / energy / plastic),
-       its own world, and its own follow camera — nothing else. */
-    body.split-iframe #timer-display,
-    body.split-iframe #leaderboard,
-    body.split-iframe #radar-hud,
-    body.split-iframe #controls-hint,
-    body.split-iframe #hydro-hud,
-    body.split-iframe #repo-guide,
-    body.split-iframe #upgrade-progress,
-    body.split-iframe #fireball-progress,
-    body.split-iframe #tips-display,
-    body.split-iframe #combo-display,
-    body.split-iframe #fireball-unlock-banner,
-    body.split-iframe #fire-crosshair { display: none !important; }
-    /* P2 iframe: flip the HUD panel to the right edge so that, once
-       the shell places P1 on the left and P2 on the right, each
-       player's HUD hugs the outer edge of the screen (closest to
-       their own quadrant) instead of dead-center. */
-    body.split-iframe-p2 #hud { left: auto; right: 20px; }
-
     #radar-hud {
       position: fixed; bottom: 18px; right: 18px;
       width: 184px; height: 184px;
@@ -1831,32 +1739,11 @@
 
     <div class="start-label" data-i18n="name_label">Nom du Capitaine</div>
     <input type="text" id="name-input" placeholder="Entre ton nom..." maxlength="16" value="Capitaine" data-i18n-placeholder="name_placeholder">
-    <!-- Menu (current scope): a single PLAY button + TUTORIEL on a row,
-         followed by a small italic line that hints multiplayer is on the
-         way. The online + split-screen code paths stay alive in the
-         page (_beginGame, _beginSplit are still defined) — we just
-         don't surface their buttons until they're ready for prime time. -->
-    <div class="start-mode-grid">
-      <button class="start-mode-btn primary" id="start-btn-online" onclick="if(window._beginGame)window._beginGame()" style="display:none" aria-hidden="true">
-        <span class="start-mode-ico">&#x1F30D;</span>
-        <span class="start-mode-text" data-i18n="start_mode_online">EN LIGNE</span>
-        <span class="start-mode-sub" data-i18n="start_mode_online_sub">Capitaines du monde entier</span>
-      </button>
-      <button class="start-mode-btn primary" id="start-btn-split" onclick="if(window._beginSplit)window._beginSplit()" style="display:none" aria-hidden="true">
-        <span class="start-mode-ico">&#x1F3AE;</span>
-        <span class="start-mode-text" data-i18n="start_mode_split">MULTI LOCAL</span>
-        <span class="start-mode-sub" data-i18n="start_mode_split_sub">Jusqu'&agrave; 4 sur un m&ecirc;me &eacute;cran</span>
-      </button>
-    </div>
     <div class="start-row">
-      <button id="start-btn" onclick="if(window._beginSolo)window._beginSolo()" data-i18n="start_btn">JOUER</button>
+      <button id="start-btn" onclick="if(window._beginGame)window._beginGame()" data-i18n="start_btn">LARGUER LES AMARRES</button>
       <button id="tutorial-btn" onclick="if(window._openTutorial)window._openTutorial()" data-i18n="tuto_btn">TUTORIEL</button>
     </div>
-    <!-- Direct entry into solo mode is also kept on the original
-         hidden 'start-btn-solo' anchor in case any script still
-         pokes it. -->
-    <button id="start-btn-solo" onclick="if(window._beginSolo)window._beginSolo()" style="display:none" aria-hidden="true">SOLO</button>
-    <div id="start-coming-soon" data-i18n="start_coming_soon">Multijoueur (en ligne &amp; &eacute;cran partag&eacute;) : bient&ocirc;t disponibles</div>
+    <a id="start-solo-link" href="#" onclick="event.preventDefault(); if(window._beginSolo)window._beginSolo();" data-i18n="start_solo_link">Jouer hors ligne (solo)</a>
   </div>
 </div>
 
@@ -13475,13 +13362,6 @@ function gameLoop(timestamp) {
     if (fireCH.style.display !== 'none') fireCH.style.display = 'none';
   }
 
-  // Split-screen: draw the other player's boat in this iframe's
-  // scene using the latest pose we received over BroadcastChannel.
-  // The mesh is created on first sight and reused every frame.
-  if (typeof _tiSplitSyncRemoteBoats === 'function') {
-    try { _tiSplitSyncRemoteBoats(); } catch (e) {}
-  }
-
   // Render (two-pass: world, then crab + countdown text on top)
   renderFrame();
 }
@@ -14415,367 +14295,6 @@ function beginSolo() {
 window._beginSolo = beginSolo;
 
 // ============================================================
-// SPLIT-SCREEN IFRAME MODE
-// ============================================================
-// When this page is loaded inside the split.html shell with
-// ?split=1&player=N, it runs the full solo game UNCHANGED — same
-// boat pose, camera, HUD, everything. Three extra behaviors layer
-// on top:
-//   1. The start menu is skipped — we auto-call beginSolo() once
-//      assets are ready, so both iframes jump straight into play.
-//   2. The page ignores its own keyboard; instead it listens for
-//      postMessage({type:'tiSplitKey', action, pressed}) from the
-//      shell and mutates the shared `input` object directly.
-//   3. A BroadcastChannel ('ti-split') exchanges each player's boat
-//      pose with the other iframe so they see each other's boats in
-//      the shared world. Player 1 is the authority for shared
-//      entities (pirates, plastic, whale) — player 2's copy of those
-//      systems stays passive and just mirrors the broadcasts.
-(() => {
-  const qs = new URLSearchParams(location.search);
-  if (qs.get('split') !== '1') return; // not in split-screen shell
-  const me = Math.max(1, Math.min(4, parseInt(qs.get('player') || '1', 10)));
-  window.__tiSplit = { enabled: true, me, isAuthority: (me === 1), others: new Map() };
-
-  // Body class lets CSS (see #radar-hud block) hide the HUD widgets
-  // that now live on the shell (timer, leaderboard, controls hint,
-  // REPO guide, Hydro panel, upgrade sidebar) so the two iframes just
-  // show the world + their own left/right HUD panel.
-  document.addEventListener('DOMContentLoaded', () => {
-    const ss = document.getElementById('start-screen');
-    if (ss) ss.hidden = true;
-    document.body.classList.add('split-iframe', 'split-iframe-p' + me);
-  });
-  // Prevent the in-iframe online code from reaching out to a server —
-  // split-screen is strictly local. Override after the function is
-  // defined (at the bottom of the inline script).
-  setTimeout(() => {
-    if (typeof window._mpConnect === 'undefined') return;
-    window._mpConnect = () => {};
-  }, 0);
-
-  // Input routing via BroadcastChannel — the shell and both iframes
-  // post to the same 'ti-split' channel, so keyboard events are
-  // captured once (by whichever window has focus) and all three
-  // receive them. This sidesteps the "only the focused iframe gets
-  // keys" limitation and lets both players mash their keys at the
-  // same time. We only mutate `input` when the message is addressed
-  // to us (d.player === me).
-  let ch = null;
-  try { ch = new BroadcastChannel('ti-split'); } catch (e) {}
-  window.__tiSplit.ch = ch;
-  if (ch) {
-    ch.onmessage = (ev) => {
-      const d = ev.data;
-      if (!d) return;
-      if (d.type === 'input' && d.player === me) {
-        if (typeof input === 'undefined') return;
-        if (d.action === 'forward' || d.action === 'backward' ||
-            d.action === 'left'    || d.action === 'right'    ||
-            d.action === 'boost') {
-          input[d.action] = !!d.pressed;
-        }
-        return;
-      }
-      if (d.type === 'pose' && d.me !== me) {
-        const nowMs = performance.now();
-        const latest = { x: d.x, z: d.z, rot: d.rot, t: nowMs };
-        const prev = window.__tiSplit.others.get(d.me);
-        if (!prev) {
-          // First sighting — seed both prev and next so the first
-          // render frame has something to interpolate between.
-          window.__tiSplit.others.set(d.me, {
-            prev: latest, next: latest,
-            health: d.health | 0, score: d.score | 0,
-          });
-        } else {
-          // Advance the ring buffer: old "next" becomes "prev", new
-          // packet becomes "next". Pattern matches the online
-          // snapshot-interpolation code in _mpApplyPoses so remote
-          // boats glide between server ticks instead of snapping
-          // every 100ms (was the "saccadé" stutter the user saw).
-          prev.prev = prev.next;
-          prev.next = latest;
-          prev.health = d.health | 0;
-          prev.score = d.score | 0;
-        }
-      }
-    };
-  }
-  // Capture keyboard locally too and rebroadcast — the focused
-  // iframe's window sees the keydown first; pushing it into the
-  // channel lets the other iframe + the shell see it as well.
-  const P1_KEYS = {
-    KeyW: 'forward', KeyS: 'backward', KeyA: 'left', KeyD: 'right', Space: 'boost',
-  };
-  const P2_KEYS = {
-    ArrowUp: 'forward', ArrowDown: 'backward',
-    ArrowLeft: 'left', ArrowRight: 'right', Enter: 'boost',
-  };
-  function _tiIframeKey(ev, pressed) {
-    let player = 0, action = null;
-    if (ev.code in P1_KEYS) { player = 1; action = P1_KEYS[ev.code]; }
-    else if (ev.code in P2_KEYS) { player = 2; action = P2_KEYS[ev.code]; }
-    if (!player) return;
-    if (ch) {
-      try { ch.postMessage({ type: 'input', player, action, pressed }); } catch (e) {}
-    }
-    ev.preventDefault();
-  }
-  window.addEventListener('keydown', (ev) => _tiIframeKey(ev, true),  true);
-  window.addEventListener('keyup',   (ev) => _tiIframeKey(ev, false), true);
-
-  // P2: mute music so we don't stack two copies of the main theme.
-  // SFX stay active on both iframes so each player hears feedback
-  // from their own actions (bumps, pickups, crank, etc.). We monkey-
-  // patch the music start/loop helpers to no-op on P2.
-  if (me !== 1) {
-    const _muteLoopHelpers = () => {
-      const names = ['startThemeMusic', 'stopThemeMusic',
-                     'updateThemeMusic', 'startEndgameTheme',
-                     'stopEndgameTheme', 'startOceanAmbient',
-                     'stopOceanAmbient', 'startMotorLoop',
-                     'stopMotorLoop', 'updateMotorLoop'];
-      for (const n of names) {
-        if (typeof window[n] === 'function') window[n] = () => {};
-      }
-      // Also null out any <audio> the game has already constructed so
-      // it can't play even if the bootstrapping code reads directly.
-      const kill = (name) => {
-        try { if (window[name] && window[name].pause) { window[name].pause(); window[name].volume = 0; } } catch (e) {}
-      };
-      kill('themeAudio'); kill('themeMainAudio'); kill('themePirateAudio');
-      kill('themeEndgameAudio'); kill('oceanAmbientAudio'); kill('motorAudio');
-    };
-    // The audio functions are defined in the main inline script, so
-    // they only exist after DOMContentLoaded-plus. Try twice.
-    setTimeout(_muteLoopHelpers, 0);
-    setTimeout(_muteLoopHelpers, 1500);
-  }
-
-  // Auto-start the solo round once the boot code finishes defining
-  // _beginSolo. We poll because initialization is asynchronous.
-  const tryStart = () => {
-    if (typeof window._beginSolo === 'function') {
-      try { window._beginSolo(); } catch (e) {}
-    } else {
-      setTimeout(tryStart, 100);
-    }
-  };
-  setTimeout(tryStart, 250);
-
-  // Pose broadcaster — 10 Hz, shape matches the online protocol so
-  // we could later reuse the server-side interpolation code.
-  setInterval(() => {
-    if (!window.__tiSplit || !window.__tiSplit.ch) return;
-    if (typeof localPlayer === 'undefined' || !localPlayer) return;
-    try {
-      window.__tiSplit.ch.postMessage({
-        type: 'pose',
-        me,
-        x: +localPlayer.x.toFixed(2),
-        z: +localPlayer.z.toFixed(2),
-        rot: +((localPlayer.rotation || 0).toFixed(3)),
-        health: localPlayer.health | 0,
-        score: localPlayer.totalCollected | 0,
-      });
-    } catch (e) {}
-  }, 100);
-
-  // Timer publisher — only P1 (authority) runs this. Broadcasts the
-  // remaining session time so the shell can paint its single shared
-  // timer pill. P2 suppresses its own clock to avoid two sources of
-  // truth.
-  if (me === 1) {
-    setInterval(() => {
-      if (!window.__tiSplit || !window.__tiSplit.ch) return;
-      if (typeof gameTimeRemaining === 'undefined') return;
-      const total = Math.max(0, Math.floor(gameTimeRemaining));
-      const mm = Math.floor(total / 60);
-      const ss = total % 60;
-      const display = String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
-      try {
-        window.__tiSplit.ch.postMessage({ type: 'timer', total, display });
-      } catch (e) {}
-    }, 500);
-  }
-
-  // Remote-boat renderer — builds a second boat mesh for each remote
-  // player whose pose we've cached and keeps it in sync with the
-  // broadcast data. Called once per frame by the game loop (see the
-  // _tiSplitSyncRemoteBoats hook there).
-  //
-  // We clone whichever boat template the solo engine already uses,
-  // so the other captain is visually identical to the local one.
-  // A small floating label above the hull names them.
-  const _tiRemoteMeshes = new Map();   // player -> THREE.Group
-  const _tiRemoteLabels = new Map();   // player -> DOM element
-
-  function _tiEnsureRemoteMesh(player) {
-    if (_tiRemoteMeshes.has(player)) return _tiRemoteMeshes.get(player);
-    if (typeof THREE === 'undefined' || typeof scene === 'undefined') return null;
-    let m;
-    try {
-      if (typeof fisherBoatTemplate !== 'undefined' && fisherBoatTemplate) {
-        m = fisherBoatTemplate.clone();
-      } else if (typeof boatModelTemplate !== 'undefined' && boatModelTemplate) {
-        m = boatModelTemplate.clone();
-      } else if (typeof createProceduralBoat === 'function') {
-        // Give the remote captain a warm contrast tint so both
-        // players are easy to tell apart at a glance.
-        m = createProceduralBoat(player === 1 ? 0x00ccff : 0xff9a3c);
-      }
-    } catch (e) {}
-    if (!m) return null;
-    // Deep-clone every material the cloned GLTF inherited from the
-    // shared template. Without this, the remote hull shares its
-    // MeshStandardMaterial with the local boat and ends up looking
-    // translucent / wrong as the solo engine mutates the shared
-    // material (emissive, opacity, etc.) each frame. Mirrors the
-    // material-clone pass that makePlayerMesh() does for the P1
-    // boat.
-    m.traverse((c) => {
-      if (c.isMesh && c.material) {
-        const mats = Array.isArray(c.material) ? c.material : [c.material];
-        const cloned = mats.map((mat) => {
-          const nm = mat.clone();
-          if (nm.emissive) {
-            nm.emissive = new THREE.Color(0x2a2420);
-            nm.emissiveIntensity = 1.0;
-          }
-          nm.transparent = false;
-          nm.opacity = 1.0;
-          nm.depthWrite = true;
-          return nm;
-        });
-        c.material = Array.isArray(c.material) ? cloned : cloned[0];
-      }
-    });
-    m.position.set(0, 0.8, 0);
-    scene.add(m);
-    _tiRemoteMeshes.set(player, m);
-    // Floating name label — we reuse the DOM label system if it's
-    // available, otherwise spawn a tiny overlay div.
-    try {
-      const lc = document.getElementById('labels-container');
-      if (lc) {
-        const el = document.createElement('div');
-        el.className = 'label-name';
-        el.textContent = 'Capitaine ' + player;
-        el.style.cssText = 'position:absolute;pointer-events:none;color:#fff;background:rgba(10,22,40,0.78);padding:2px 7px;border-radius:6px;font-family:var(--font-heading);font-size:0.68rem;letter-spacing:1px;';
-        lc.appendChild(el);
-        _tiRemoteLabels.set(player, el);
-      }
-    } catch (e) {}
-    return m;
-  }
-
-  window._tiSplitSyncRemoteBoats = function _tiSplitSyncRemoteBoats() {
-    if (!window.__tiSplit) return;
-    const others = window.__tiSplit.others;
-    if (!others || others.size === 0) return;
-    if (typeof getWaveHeight !== 'function' || typeof gameTime === 'undefined') return;
-    // One-tick render-behind delay gives us a safe window to
-    // interpolate between the last two known poses without
-    // extrapolating (which is what produces rubber-band visuals
-    // under jitter). 130ms = 1 publish tick (100ms) + a 30ms
-    // cushion; same value the online code uses.
-    const RENDER_DELAY_MS = 130;
-    const renderT = performance.now() - RENDER_DELAY_MS;
-    for (const [player, cache] of others.entries()) {
-      const m = _tiEnsureRemoteMesh(player);
-      if (!m || !cache.prev || !cache.next) continue;
-      const span = Math.max(1, cache.next.t - cache.prev.t);
-      let alpha = (renderT - cache.prev.t) / span;
-      if (alpha < 0) alpha = 0;
-      if (alpha > 1) alpha = 1;
-      const ix = cache.prev.x + (cache.next.x - cache.prev.x) * alpha;
-      const iz = cache.prev.z + (cache.next.z - cache.prev.z) * alpha;
-      // Angle lerp with wrap-around so a boat spinning past PI
-      // doesn't rotate the long way around.
-      let dr = cache.next.rot - cache.prev.rot;
-      while (dr >  Math.PI) dr -= 2 * Math.PI;
-      while (dr < -Math.PI) dr += 2 * Math.PI;
-      const irot = cache.prev.rot + dr * alpha;
-      // Bobbing + tilt — match the solo boat math so the remote
-      // captain rises and rolls on the same waves as the local
-      // player (without it, their hull looks like it's floating
-      // above flat water while the local boat bobs).
-      const wy = getWaveHeight(ix, iz, gameTime);
-      const tilt = (typeof getWaveTilt === 'function')
-        ? getWaveTilt(ix, iz, gameTime)
-        : { tiltX: 0, tiltZ: 0 };
-      const baseYRot = -Math.PI / 2;
-      m.position.set(ix, wy + 0.8, iz);
-      m.rotation.order = 'YXZ';
-      m.rotation.set(tilt.tiltX, irot + baseYRot, tilt.tiltZ);
-      // Project the hull position to screen and place the label.
-      const lbl = _tiRemoteLabels.get(player);
-      if (lbl && typeof camera !== 'undefined' && typeof renderer !== 'undefined') {
-        const v = new THREE.Vector3(ix, wy + 3.4, iz);
-        v.project(camera);
-        const canvas = renderer.domElement;
-        if (v.z < 1) {
-          const sx = (v.x * 0.5 + 0.5) * canvas.clientWidth;
-          const sy = (-v.y * 0.5 + 0.5) * canvas.clientHeight;
-          lbl.style.left = (sx - 32) + 'px';
-          lbl.style.top  = (sy - 18) + 'px';
-          lbl.style.display = 'block';
-        } else {
-          lbl.style.display = 'none';
-        }
-      }
-    }
-  };
-})();
-
-// ============================================================
-// Split-screen (local multi) — Phase 1: menu button is live, engine
-// is not. Clicking shows a "coming soon" toast so players know the
-// slot exists without hitting a broken code path. Phase 2 will wire
-// this to the real multi-viewport launcher.
-// ============================================================
-// Launch split-screen by navigating to the dedicated shell page.
-// The shell loads two iframes of trashure-fury.html?split=1&player=N
-// side by side and routes keyboard input to the right iframe via
-// postMessage. Each iframe runs the full solo game — the split
-// hook inside this file auto-starts the solo loop and swaps the
-// keyboard listener for the shell's postMessage stream.
-// Local split-screen is parked behind a "coming soon" toast while
-// the multi-viewport engine is reworked. The 3-button menu still
-// shows MULTI LOCAL — clicking it surfaces this notice instead of
-// hitting a broken code path.
-function beginSplit() {
-  const title = (typeof tr === 'function') ? tr('split_soon_title') : 'Coming soon';
-  const body  = (typeof tr === 'function') ? tr('split_soon_body')
-    : 'Local split-screen multiplayer is coming soon.';
-  let el = document.getElementById('split-soon-banner');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'split-soon-banner';
-    el.style.cssText = [
-      'position:fixed', 'z-index:9999', 'left:50%', 'top:24%',
-      'transform:translateX(-50%)',
-      'max-width:380px', 'padding:16px 20px',
-      'background:rgba(12,28,48,0.95)',
-      'border:1px solid rgba(160,220,255,0.55)',
-      'border-radius:12px',
-      'color:#e8f3ff', 'font-family:var(--font-body)',
-      'box-shadow:0 12px 40px rgba(0,0,0,0.5)',
-      'text-align:center', 'line-height:1.35',
-    ].join(';');
-    document.body.appendChild(el);
-  }
-  el.innerHTML =
-    '<div style="font-family:var(--font-heading);font-size:1rem;letter-spacing:2px;margin-bottom:6px;color:#ffd080;">'
-    + title.replace(/</g, '&lt;') + '</div>'
-    + '<div style="font-size:0.85rem;">' + body.replace(/</g, '&lt;') + '</div>';
-  clearTimeout(beginSplit._t);
-  beginSplit._t = setTimeout(() => { el && el.remove(); }, 4500);
-}
-window._beginSplit = beginSplit;
-
-// ============================================================
 // Soft rejoin — restart a personal 3-min session without reloading.
 // Triggered by the gameover overlay's "REJOUER" button and fired
 // automatically on session_end if the player wants a quick reset.
@@ -15593,8 +15112,7 @@ const I18N_STRINGS = {
     tip_body: 'Le plastique <b style="color:#ff88bb">rose</b> te soigne. \u00C9vite les pirates et la <b style="color:#4488cc">baleine</b> !',
     name_label: 'Nom du Capitaine',
     name_placeholder: 'Entre ton nom...',
-    start_btn: 'JOUER',
-    start_coming_soon: 'Multijoueur (en ligne et &eacute;cran partag&eacute;) : bient\u00F4t disponible',
+    start_btn: 'LARGUER LES AMARRES',
     tuto_btn: 'TUTORIEL',
     protocol_btn: 'NOTRE PROTOCOLE',
     protocol_title: 'Protocole Scientifique',
@@ -15697,15 +15215,6 @@ const I18N_STRINGS = {
     wr_hint_playing: 'Une manche est en cours. Tu joueras \u00E0 la prochaine.',
     wr_hint_recap: 'R\u00E9cap de la manche en cours. Prochaine manche dans un instant.',
     start_solo_link: 'Jouer hors ligne (solo)',
-    start_mode_online:     'EN LIGNE',
-    start_mode_online_sub: 'Capitaines du monde entier',
-    start_mode_split:      'MULTI LOCAL',
-    start_mode_split_sub:  'Jusqu\u2019\u00E0 4 sur un m\u00EAme \u00E9cran',
-    start_mode_solo:       'SOLO',
-    start_mode_solo_sub:   'Contre des bots, hors ligne',
-    split_soon_title:      'Bient\u00F4t disponible',
-    split_soon_body:       'Le mode 4 joueurs sur un m\u00EAme \u00E9cran arrive. En attendant, lance une partie en ligne ou en solo.',
-    split_soon_close:      'OK',
     wr_seat_human: 'Humain',
     wr_seat_bot: 'Bot',
     wr_seat_open: 'Si\u00E8ge libre',
@@ -15724,8 +15233,7 @@ const I18N_STRINGS = {
     tip_body: '<b style="color:#ff88bb">Pink</b> plastic heals you. Dodge the pirates and the <b style="color:#4488cc">whale</b>!',
     name_label: 'Captain name',
     name_placeholder: 'Enter your name...',
-    start_btn: 'PLAY',
-    start_coming_soon: 'Multiplayer (online and split-screen): coming soon',
+    start_btn: 'CAST OFF',
     tuto_btn: 'TUTORIAL',
     protocol_btn: 'OUR PROTOCOL',
     protocol_title: 'Scientific Protocol',
@@ -15826,15 +15334,6 @@ const I18N_STRINGS = {
     wr_hint_playing: 'A round is in progress. You\u2019ll join the next one.',
     wr_hint_recap: 'Round recap in progress. Next round starts shortly.',
     start_solo_link: 'Play offline (solo)',
-    start_mode_online:     'ONLINE',
-    start_mode_online_sub: 'Captains from around the world',
-    start_mode_split:      'LOCAL MULTI',
-    start_mode_split_sub:  'Up to 4 on the same screen',
-    start_mode_solo:       'SOLO',
-    start_mode_solo_sub:   'Versus bots, offline',
-    split_soon_title:      'Coming soon',
-    split_soon_body:       'Four-player split-screen is on the way. In the meantime, try online or solo.',
-    split_soon_close:      'OK',
     wr_seat_human: 'Human',
     wr_seat_bot: 'Bot',
     wr_seat_open: 'Seat open',
