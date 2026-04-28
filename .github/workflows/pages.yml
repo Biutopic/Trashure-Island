@@ -35,7 +35,6 @@ jobs:
           # Also keep the original name so direct links keep working.
           cp trashure-fury.html _site/trashure-fury.html
           # Split-screen shell — hosts two iframes of the main game.
-          cp split.html _site/split.html
           # Copy the assets directory as-is. The game references them as
           # ./public/assets/... so we preserve that layout.
           mkdir -p _site/public

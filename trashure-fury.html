@@ -371,6 +371,18 @@
       transform: translateY(-3px) scale(1.01);
       box-shadow: 0 10px 34px rgba(0, 220, 200, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.3);
     }
+    /* Footer hint inside the start panel: signals that multiplayer
+       modes are on the roadmap without putting a broken button on
+       the page. Sits below the JOUER + TUTORIEL row. */
+    #start-coming-soon {
+      margin-top: 14px;
+      font-family: var(--font-body);
+      font-size: 0.72rem;
+      font-style: italic;
+      color: rgba(180, 220, 255, 0.55);
+      text-align: center;
+      letter-spacing: 0.4px;
+    }
     #tutorial-btn {
       flex: 0 0 auto;
       padding: 18px 22px;
@@ -1819,33 +1831,32 @@
 
     <div class="start-label" data-i18n="name_label">Nom du Capitaine</div>
     <input type="text" id="name-input" placeholder="Entre ton nom..." maxlength="16" value="Capitaine" data-i18n-placeholder="name_placeholder">
+    <!-- Menu (current scope): a single PLAY button + TUTORIEL on a row,
+         followed by a small italic line that hints multiplayer is on the
+         way. The online + split-screen code paths stay alive in the
+         page (_beginGame, _beginSplit are still defined) — we just
+         don't surface their buttons until they're ready for prime time. -->
     <div class="start-mode-grid">
-      <!-- Online mode is archived while split-screen is being rebuilt
-           as iframes. The code path stays intact and _beginGame() still
-           works if called directly, but the menu button is hidden so
-           players don't pick a mode that isn't ready for prime time. -->
       <button class="start-mode-btn primary" id="start-btn-online" onclick="if(window._beginGame)window._beginGame()" style="display:none" aria-hidden="true">
         <span class="start-mode-ico">&#x1F30D;</span>
         <span class="start-mode-text" data-i18n="start_mode_online">EN LIGNE</span>
         <span class="start-mode-sub" data-i18n="start_mode_online_sub">Capitaines du monde entier</span>
       </button>
-      <button class="start-mode-btn primary" id="start-btn-split" onclick="if(window._beginSplit)window._beginSplit()">
+      <button class="start-mode-btn primary" id="start-btn-split" onclick="if(window._beginSplit)window._beginSplit()" style="display:none" aria-hidden="true">
         <span class="start-mode-ico">&#x1F3AE;</span>
         <span class="start-mode-text" data-i18n="start_mode_split">MULTI LOCAL</span>
         <span class="start-mode-sub" data-i18n="start_mode_split_sub">Jusqu'&agrave; 4 sur un m&ecirc;me &eacute;cran</span>
       </button>
-      <button class="start-mode-btn" id="start-btn-solo" onclick="if(window._beginSolo)window._beginSolo()">
-        <span class="start-mode-ico">&#x1F6A2;</span>
-        <span class="start-mode-text" data-i18n="start_mode_solo">SOLO</span>
-        <span class="start-mode-sub" data-i18n="start_mode_solo_sub">Contre des bots, hors ligne</span>
-      </button>
     </div>
     <div class="start-row">
+      <button id="start-btn" onclick="if(window._beginSolo)window._beginSolo()" data-i18n="start_btn">JOUER</button>
       <button id="tutorial-btn" onclick="if(window._openTutorial)window._openTutorial()" data-i18n="tuto_btn">TUTORIEL</button>
     </div>
-    <!-- Legacy anchor kept for any direct link that used it; the three
-         mode buttons above are the real entry points now. -->
-    <button id="start-btn" style="display:none" onclick="if(window._beginGame)window._beginGame()" data-i18n="start_btn" aria-hidden="true">LARGUER LES AMARRES</button>
+    <!-- Direct entry into solo mode is also kept on the original
+         hidden 'start-btn-solo' anchor in case any script still
+         pokes it. -->
+    <button id="start-btn-solo" onclick="if(window._beginSolo)window._beginSolo()" style="display:none" aria-hidden="true">SOLO</button>
+    <div id="start-coming-soon" data-i18n="start_coming_soon">Multijoueur (en ligne &amp; &eacute;cran partag&eacute;) : bient&ocirc;t disponibles</div>
   </div>
 </div>
 
@@ -14730,8 +14741,37 @@ window._beginSolo = beginSolo;
 // postMessage. Each iframe runs the full solo game — the split
 // hook inside this file auto-starts the solo loop and swaps the
 // keyboard listener for the shell's postMessage stream.
+// Local split-screen is parked behind a "coming soon" toast while
+// the multi-viewport engine is reworked. The 3-button menu still
+// shows MULTI LOCAL — clicking it surfaces this notice instead of
+// hitting a broken code path.
 function beginSplit() {
-  location.href = 'split.html';
+  const title = (typeof tr === 'function') ? tr('split_soon_title') : 'Coming soon';
+  const body  = (typeof tr === 'function') ? tr('split_soon_body')
+    : 'Local split-screen multiplayer is coming soon.';
+  let el = document.getElementById('split-soon-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'split-soon-banner';
+    el.style.cssText = [
+      'position:fixed', 'z-index:9999', 'left:50%', 'top:24%',
+      'transform:translateX(-50%)',
+      'max-width:380px', 'padding:16px 20px',
+      'background:rgba(12,28,48,0.95)',
+      'border:1px solid rgba(160,220,255,0.55)',
+      'border-radius:12px',
+      'color:#e8f3ff', 'font-family:var(--font-body)',
+      'box-shadow:0 12px 40px rgba(0,0,0,0.5)',
+      'text-align:center', 'line-height:1.35',
+    ].join(';');
+    document.body.appendChild(el);
+  }
+  el.innerHTML =
+    '<div style="font-family:var(--font-heading);font-size:1rem;letter-spacing:2px;margin-bottom:6px;color:#ffd080;">'
+    + title.replace(/</g, '&lt;') + '</div>'
+    + '<div style="font-size:0.85rem;">' + body.replace(/</g, '&lt;') + '</div>';
+  clearTimeout(beginSplit._t);
+  beginSplit._t = setTimeout(() => { el && el.remove(); }, 4500);
 }
 window._beginSplit = beginSplit;
 
@@ -15553,7 +15593,8 @@ const I18N_STRINGS = {
     tip_body: 'Le plastique <b style="color:#ff88bb">rose</b> te soigne. \u00C9vite les pirates et la <b style="color:#4488cc">baleine</b> !',
     name_label: 'Nom du Capitaine',
     name_placeholder: 'Entre ton nom...',
-    start_btn: 'LARGUER LES AMARRES',
+    start_btn: 'JOUER',
+    start_coming_soon: 'Multijoueur (en ligne et &eacute;cran partag&eacute;) : bient\u00F4t disponible',
     tuto_btn: 'TUTORIEL',
     protocol_btn: 'NOTRE PROTOCOLE',
     protocol_title: 'Protocole Scientifique',
@@ -15683,7 +15724,8 @@ const I18N_STRINGS = {
     tip_body: '<b style="color:#ff88bb">Pink</b> plastic heals you. Dodge the pirates and the <b style="color:#4488cc">whale</b>!',
     name_label: 'Captain name',
     name_placeholder: 'Enter your name...',
-    start_btn: 'CAST OFF',
+    start_btn: 'PLAY',
+    start_coming_soon: 'Multiplayer (online and split-screen): coming soon',
     tuto_btn: 'TUTORIAL',
     protocol_btn: 'OUR PROTOCOL',
     protocol_title: 'Scientific Protocol',
