@@ -1968,6 +1968,127 @@
 
     /* ---- hidden ---- */
     [hidden] { display: none !important; }
+
+    /* ==================== MOBILE / PHONE LAYOUT ==================== */
+    /* On a phone-sized viewport (or coarse-pointer touch device) the
+       game has too many overlays for the screen to breathe — we hide
+       everything optional (radar, tip robot, controls hint, in-game
+       leaderboard, fire reticle) and shrink the must-haves (HUD,
+       timer, menu). Touch controls are shown only when the device
+       actually has a touch screen. */
+    body.is-mobile #radar-hud,
+    body.is-mobile #repo-canvas,
+    body.is-mobile #tips-display,
+    body.is-mobile #controls-hint,
+    body.is-mobile #leaderboard,
+    body.is-mobile #fire-crosshair,
+    body.is-mobile #fps-display,
+    body.is-mobile #combo-display {
+      display: none !important;
+    }
+    /* Shrink HUD panel and font for phone */
+    body.is-mobile #hud {
+      top: 8px; left: 8px;
+      padding: 8px 10px;
+      width: auto; min-width: 160px; max-width: 60vw;
+      font-size: 0.7rem;
+    }
+    body.is-mobile #hud .hud-name {
+      font-size: 0.7rem; margin-bottom: 6px;
+    }
+    body.is-mobile #hud .hud-name .hud-cap-name { font-size: 0.65rem; }
+    body.is-mobile #hud .hud-bar-wrap { height: 8px; }
+    body.is-mobile #timer-display {
+      top: 6px;
+      padding: 4px 10px;
+      font-size: 0.95rem;
+    }
+    body.is-mobile #hydro-hud {
+      padding: 6px 8px; font-size: 0.65rem;
+      bottom: 130px; left: 8px;
+    }
+    body.is-mobile #upgrade-progress {
+      bottom: 130px; right: 8px;
+      padding: 6px 8px; font-size: 0.65rem;
+    }
+    /* Compact the in-game upgrade picker so it doesn't collide with
+       the touch fire/boost pad on the right edge. */
+    body.is-mobile #upgrade-overlay {
+      transform: translateY(-50%) scale(0.7);
+      transform-origin: right center;
+      right: 6px !important;
+    }
+    /* Shrink the start screen panel so it fits a phone in portrait */
+    body.is-mobile .start-panel {
+      transform: scale(0.85);
+      transform-origin: top center;
+      max-width: 92vw;
+    }
+
+    /* ---- Touch controls (only when actually a touch device) ---- */
+    #touch-controls {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 40;
+      display: none;
+      user-select: none; -webkit-user-select: none;
+      touch-action: none;
+    }
+    body.is-mobile.is-touch #touch-controls { display: block; }
+    /* Left thumb joystick */
+    #touch-stick-zone {
+      position: absolute; left: 14px; bottom: 14px;
+      width: 130px; height: 130px;
+      pointer-events: auto;
+      background: radial-gradient(circle, rgba(0,200,255,0.10), rgba(0,200,255,0.02) 60%, transparent 70%);
+      border: 1px solid rgba(0,200,255,0.30);
+      border-radius: 50%;
+    }
+    #touch-stick-nub {
+      position: absolute; left: 50%; top: 50%;
+      width: 56px; height: 56px; margin-left: -28px; margin-top: -28px;
+      background: radial-gradient(circle, rgba(0,220,255,0.40), rgba(0,150,200,0.20));
+      border: 2px solid rgba(0,220,255,0.85);
+      border-radius: 50%;
+      box-shadow: 0 0 14px rgba(0,200,255,0.35);
+      pointer-events: none;
+      transition: transform 0.08s ease-out;
+    }
+    /* Right thumb action buttons */
+    #touch-action-pad {
+      position: absolute; right: 14px; bottom: 14px;
+      display: flex; flex-direction: column; gap: 10px;
+      pointer-events: none;
+    }
+    .touch-btn {
+      pointer-events: auto;
+      width: 70px; height: 70px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-heading); font-weight: 800; font-size: 0.7rem;
+      color: #fff; letter-spacing: 0.08em;
+      border: 2px solid rgba(255,255,255,0.85);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.45), inset 0 -2px 4px rgba(0,0,0,0.25);
+      user-select: none; -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.08s ease-out, box-shadow 0.08s;
+    }
+    .touch-btn:active, .touch-btn.pressed {
+      transform: scale(0.92);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.45), inset 0 -1px 3px rgba(0,0,0,0.35);
+    }
+    .touch-btn.boost   { background: linear-gradient(135deg, #ff7a18, #c5390f); }
+    .touch-btn.fire    { background: linear-gradient(135deg, #ff4d4d, #aa0a0a); }
+    .touch-btn.gas     { background: linear-gradient(135deg, #2c8eff, #0d4aa0); }
+    /* Top-right pause button on mobile */
+    #touch-pause-btn {
+      position: absolute; right: 14px; top: 14px;
+      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: auto;
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.55);
+      color: #fff; font-size: 1.3rem; line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+    }
   </style>
 </head>
 <body>
@@ -2186,6 +2307,19 @@
 
   <!-- Combo display -->
   <div id="combo-display" class="glass-panel"></div>
+
+  <!-- Touch controls: virtual joystick (left) + action buttons (right).
+       Only shown when body.is-mobile.is-touch — desktop / pads ignore. -->
+  <div id="touch-controls" aria-hidden="true">
+    <div id="touch-stick-zone">
+      <div id="touch-stick-nub"></div>
+    </div>
+    <div id="touch-action-pad">
+      <div class="touch-btn boost" id="touch-boost-btn">BOOST</div>
+      <div class="touch-btn fire"  id="touch-fire-btn">FIRE</div>
+    </div>
+    <button id="touch-pause-btn" aria-label="Pause" type="button">⏸</button>
+  </div>
   <!-- Pause overlay — toggled by Home/Guide button (or Start) on the
        controller, or Escape on keyboard. While shown, the game loop
        skips its update step so nothing moves. -->
@@ -2373,6 +2507,29 @@
      smart TV, kiosk) failures look like "nothing happens" — this
      surfaces the actual error text so a non-load can be diagnosed at
      a glance. Auto-hides once the game canvas starts producing frames. -->
+<script>
+// Mobile / touch detection. Sets `body.is-mobile` when the viewport is
+// phone-sized AND `body.is-touch` when the device has a coarse pointer
+// (real touch screen, not just a touchpad). Used by CSS to hide
+// non-essential overlays and by JS to enable virtual joystick.
+(function setupMobileDetection() {
+  function apply() {
+    var b = document.body || document.documentElement;
+    if (!b) return;
+    var w = Math.min(window.innerWidth, screen ? screen.width : 9999);
+    var isSmall = w < 820;
+    var isTouch = ('ontouchstart' in window) ||
+                  (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    b.classList.toggle('is-mobile', isSmall);
+    b.classList.toggle('is-touch',  isTouch);
+  }
+  if (document.body) apply();
+  else document.addEventListener('DOMContentLoaded', apply);
+  window.addEventListener('resize', apply);
+  window.addEventListener('orientationchange', apply);
+})();
+</script>
+
 <script>
 (function setupBootDiagnostics() {
   // Pre-collect environment info so a single screenshot tells the
@@ -8961,6 +9118,135 @@ window.addEventListener('keyup', (e) => {
     }
   }
 });
+
+// ============================================================
+// TOUCH CONTROLS — virtual joystick + fire/boost/pause buttons.
+// ============================================================
+// Active only when body.is-mobile.is-touch (set by the early-init
+// detection script). Joystick writes into the same `input` flags
+// the keyboard touches. Fire button mirrors the keyboard Shift
+// charge / release flow so the existing fireball logic just works.
+(function setupTouchControls() {
+  const stickZone = document.getElementById('touch-stick-zone');
+  const stickNub  = document.getElementById('touch-stick-nub');
+  const fireBtn   = document.getElementById('touch-fire-btn');
+  const boostBtn  = document.getElementById('touch-boost-btn');
+  const pauseBtn  = document.getElementById('touch-pause-btn');
+  if (!stickZone || !stickNub) return;
+
+  // ---- Virtual joystick ----
+  let stickActive = false, stickPid = null;
+  const STICK_R = 60; // radius the nub can travel within the zone
+  function resetStick() {
+    stickNub.style.transform = 'translate(0, 0)';
+    input.forward = input.backward = input.left = input.right = false;
+  }
+  function updateStick(clientX, clientY) {
+    const rect = stickZone.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top  + rect.height / 2;
+    let dx = clientX - cx, dy = clientY - cy;
+    const mag = Math.hypot(dx, dy);
+    if (mag > STICK_R) { dx = dx / mag * STICK_R; dy = dy / mag * STICK_R; }
+    stickNub.style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
+    // Same deadzone shape as the gamepad mapping.
+    const norm = Math.min(1, mag / STICK_R);
+    const DZ = 0.18;
+    if (norm < DZ) {
+      input.forward = input.backward = input.left = input.right = false;
+    } else {
+      input.forward  = dy < -STICK_R * DZ * 0.7;
+      input.backward = dy >  STICK_R * DZ * 0.7;
+      input.left     = dx < -STICK_R * DZ * 0.7;
+      input.right    = dx >  STICK_R * DZ * 0.7;
+    }
+  }
+  stickZone.addEventListener('touchstart', (e) => {
+    if (stickActive) return;
+    const t = e.changedTouches[0];
+    stickActive = true; stickPid = t.identifier;
+    updateStick(t.clientX, t.clientY);
+    e.preventDefault();
+  }, { passive: false });
+  window.addEventListener('touchmove', (e) => {
+    if (!stickActive) return;
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickPid) {
+        updateStick(t.clientX, t.clientY);
+        e.preventDefault();
+        break;
+      }
+    }
+  }, { passive: false });
+  function endStickTouch(e) {
+    if (!stickActive) return;
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickPid) { stickActive = false; stickPid = null; resetStick(); break; }
+    }
+  }
+  window.addEventListener('touchend',    endStickTouch);
+  window.addEventListener('touchcancel', endStickTouch);
+
+  // ---- Boost button (hold) ----
+  if (boostBtn) {
+    boostBtn.addEventListener('touchstart', (e) => {
+      input.boost = true;
+      boostBtn.classList.add('pressed');
+      try { if (localPlayer && localPlayer.boostEnergy > 0.05) sfx.boost(); } catch (err) {}
+      e.preventDefault();
+    }, { passive: false });
+    const endBoost = (e) => { input.boost = false; boostBtn.classList.remove('pressed'); if (e) e.preventDefault(); };
+    boostBtn.addEventListener('touchend',    endBoost, { passive: false });
+    boostBtn.addEventListener('touchcancel', endBoost, { passive: false });
+  }
+
+  // ---- Fire button (hold to charge, release to shoot — mirrors Shift) ----
+  if (fireBtn) {
+    fireBtn.addEventListener('touchstart', (e) => {
+      fireBtn.classList.add('pressed');
+      if (!fireCharging && localPlayer) {
+        if (localPlayer.totalCollected < FIREBALL_UNLOCK_COST) {
+          spawnFloatingText(localPlayer.x, localPlayer.z,
+            tr('float_fireball_prefix') + ' ' + localPlayer.totalCollected + '/' + FIREBALL_UNLOCK_COST,
+            '#888899');
+        } else {
+          fireCharging = true;
+          fireChargeStart = performance.now() / 1000;
+          input.fire = true;
+          try { sfx.fireCharge(); } catch (err) {}
+        }
+      }
+      e.preventDefault();
+    }, { passive: false });
+    const releaseFire = (e) => {
+      fireBtn.classList.remove('pressed');
+      if (fireCharging) {
+        const chargeTime = performance.now() / 1000 - fireChargeStart;
+        if (chargeTime >= FIRE_MIN_CHARGE) tryShootFireball(chargeTime, true);
+        fireCharging = false;
+        fireChargeStart = 0;
+        fireEnergyDrained = 0;
+        input.fire = false;
+      }
+      if (e) e.preventDefault();
+    };
+    fireBtn.addEventListener('touchend',    releaseFire, { passive: false });
+    fireBtn.addEventListener('touchcancel', releaseFire, { passive: false });
+  }
+
+  // ---- Pause button ----
+  if (pauseBtn) {
+    pauseBtn.addEventListener('click', () => {
+      if (typeof togglePause === 'function') togglePause();
+    });
+  }
+
+  // Prevent the page from scrolling / pinch-zooming when interacting
+  // with touch controls or the game canvas.
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  const gameCanvas = document.getElementById('game-canvas');
+  if (gameCanvas) gameCanvas.style.touchAction = 'none';
+})();
 
 // ============================================================
 // GAMEPAD — Xbox/Thorium-style controller (Standard Mapping)
