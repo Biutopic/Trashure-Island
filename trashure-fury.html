@@ -9154,6 +9154,32 @@ function pollGamepad() {
     return;
   }
 
+  // Tutorial overlay → D-pad ← → (or stick) for prev/next, A = next /
+  // Start on the last step, B = back to menu. Edge-detected so a held
+  // input doesn't fast-forward. Stops here so gameplay doesn't react.
+  const tutoOverlay = document.getElementById('tutorial-overlay');
+  if (tutoOverlay && tutoOverlay.classList.contains('active')) {
+    const lNow = btn(_GP_BTN_DPAD_L) || (gp.axes[_GP_AXIS_LX] || 0) < -0.5;
+    const rNow = btn(_GP_BTN_DPAD_R) || (gp.axes[_GP_AXIS_LX] || 0) >  0.5;
+    const aNow = btn(_GP_BTN_A);
+    const bNow = btn(_GP_BTN_B);
+    if (lNow && !_GP.prevDpadL) {
+      if (typeof prevTutoStep === 'function') prevTutoStep();
+    }
+    if (rNow && !_GP.prevDpadR) {
+      if (typeof nextTutoStep === 'function') nextTutoStep();
+    }
+    if (aNow && !_GP.prevA) {
+      if (typeof nextTutoStep === 'function') nextTutoStep();
+    }
+    if (bNow && !_GP.prevB) {
+      if (typeof closeTutorial === 'function') closeTutorial();
+    }
+    _GP.prevDpadL = lNow; _GP.prevDpadR = rNow;
+    _GP.prevA = aNow; _GP.prevB = bNow;
+    return;
+  }
+
   // While paused: D-pad cycles between Resume / Menu, A activates.
   // Don't bleed into gameplay input below.
   if (gamePaused) {
