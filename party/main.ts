@@ -205,6 +205,25 @@ const SPAM_PATTERNS = [
   "@stes.tg",
   "@trash.com",
 ];
+// ---- Research runs (room "runs") ----
+// Anonymous piloting recordings posted by the browser game, one record
+// per ~15 s chunk. Format: docs/RUNS_SCHEMA.md.
+const RUN_MAX_CHUNK_CHARS = 110_000; // DO storage caps a value at 128 KiB
+const RUN_MAX_SEQ         = 99;
+const RUN_EXPORT_MAX      = 200;
+
+// Returns an error code, or null when the chunk is acceptable.
+function validateRunChunk(b: any): string | null {
+  if (!b || typeof b !== "object" || b.kind !== "run") return "bad_kind";
+  if (!Number.isInteger(b.v) || b.v < 1) return "bad_version";
+  if (typeof b.rid !== "string" || !/^[a-z0-9]{8,32}$/.test(b.rid)) return "bad_rid";
+  if (!Number.isInteger(b.seq) || b.seq < 0 || b.seq > RUN_MAX_SEQ) return "bad_seq";
+  if (!Array.isArray(b.f) || !Array.isArray(b.o) || !Array.isArray(b.e)) return "bad_arrays";
+  if (b.hdr !== undefined && (typeof b.hdr !== "object" || b.hdr === null || Array.isArray(b.hdr))) return "bad_hdr";
+  if (b.end !== undefined && (typeof b.end !== "object" || b.end === null || Array.isArray(b.end))) return "bad_end";
+  return null;
+}
+
 function isSpamEntry(email: unknown, name: unknown): boolean {
   const e = String(email || "").trim().toLowerCase();
   const n = String(name || "").trim().toLowerCase();
@@ -721,6 +740,7 @@ export default class TrashureRoom implements Party.Server {
     if (req.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: cors });
     }
+    if (this.room.id === "runs") return this.onRunsRequest(req, cors);
     // GET ?action=admin&token=... → dump full score records (name +
     // score + email + at). Used to verify that the menu's email gate
     // is actually capturing emails. Token-protected because email
@@ -981,6 +1001,61 @@ export default class TrashureRoom implements Party.Server {
       return new Response(JSON.stringify({ ok: true, room: "consents" }), {
         status: 200, headers: { ...cors, "Content-Type": "application/json" },
       });
+    }
+    return new Response("Method Not Allowed", { status: 405, headers: cors });
+  }
+
+  // The "runs" room only ever stores research chunks, so they never
+  // share storage (or an admin dump) with consents / emails / scores.
+  //   POST (text/plain JSON chunk) → stored under run:<rid>:<seq>.
+  //        Re-posting the same chunk overwrites it, so client retries
+  //        are idempotent. Receive time is rounded to the hour.
+  //   GET ?action=runs_export&token=…&after=<key>&limit=N → chunks in
+  //        key order, paged; `next` is the `after` for the next page.
+  async onRunsRequest(req: Party.Request, cors: Record<string, string>): Promise<Response> {
+    const json = (obj: unknown, status = 200) => new Response(JSON.stringify(obj), {
+      status, headers: { ...cors, "Content-Type": "application/json" },
+    });
+    // @ts-ignore — runtime storage
+    const storage = (this.room as any).storage;
+    if (req.method === "POST") {
+      const text = await req.text();
+      if (text.length > RUN_MAX_CHUNK_CHARS) return json({ ok: false, err: "too_big" }, 413);
+      let b: any;
+      try { b = JSON.parse(text); } catch { return json({ ok: false, err: "bad_json" }, 400); }
+      const err = validateRunChunk(b);
+      if (err) return json({ ok: false, err }, 400);
+      const rec: Record<string, unknown> = {
+        v: b.v, rid: b.rid, seq: b.seq, fin: b.fin === true,
+        f: b.f, o: b.o, e: b.e,
+        at: Math.floor(Date.now() / 3_600_000) * 3_600_000,
+      };
+      if (b.hdr) rec.hdr = b.hdr;
+      if (b.end) rec.end = b.end;
+      const key = "run:" + b.rid + ":" + String(b.seq).padStart(2, "0");
+      try { await storage.put(key, rec); } catch { return json({ ok: false, err: "storage" }, 500); }
+      return json({ ok: true });
+    }
+    if (req.method === "GET") {
+      const url = new URL(req.url);
+      if (url.searchParams.get("action") !== "runs_export") return json({ ok: true, room: "runs" });
+      const ADMIN_TOKEN = (this.room as any).env.ADMIN_TOKEN as string;
+      if (!ADMIN_TOKEN || url.searchParams.get("token") !== ADMIN_TOKEN) {
+        return json({ ok: false, err: "forbidden" }, 403);
+      }
+      const limit = Math.max(1, Math.min(RUN_EXPORT_MAX, Number(url.searchParams.get("limit") || 50)));
+      const after = url.searchParams.get("after") || "";
+      try {
+        const opts: Record<string, unknown> = { prefix: "run:", limit };
+        if (after) opts.startAfter = after;
+        const page = await storage.list(opts);
+        const rows: any[] = [];
+        let last = "";
+        for (const [k, v] of (page as Map<string, any>).entries()) { rows.push({ k, ...v }); last = k; }
+        return json({ ok: true, rows, next: rows.length === limit ? last : null });
+      } catch {
+        return json({ ok: false, err: "storage" }, 500);
+      }
     }
     return new Response("Method Not Allowed", { status: 405, headers: cors });
   }

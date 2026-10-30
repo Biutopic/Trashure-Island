@@ -284,7 +284,7 @@
     /* Consent row — small checkbox + small disclaimer. Kept readable
        without dominating the menu. Required field; the button is
        disabled until it's checked. */
-    #consent-row {
+    #consent-row, #research-row {
       display: flex; align-items: flex-start; gap: 10px;
       margin: 4px 0 14px;
       font-family: var(--font-body);
@@ -293,7 +293,8 @@
       text-align: left;
       cursor: pointer;
     }
-    #consent-row input[type="checkbox"] {
+    #research-row { margin-top: -8px; }
+    #consent-row input[type="checkbox"], #research-row input[type="checkbox"] {
       flex: 0 0 auto;
       margin-top: 2px;
       width: 16px; height: 16px;
@@ -2134,6 +2135,12 @@
     <label id="consent-row">
       <input type="checkbox" id="consent-input" required>
       <span data-i18n="consent_text">J&rsquo;accepte d&rsquo;&ecirc;tre contact&eacute; et que mes donn&eacute;es de jeu soient utilis&eacute;es pour entra&icirc;ner le mod&egrave;le de l&rsquo;Hydronaute IA.</span>
+    </label>
+    <!-- Optional, ticked by default, resets every page load (kiosks:
+         one player unticking must not opt out the next one). -->
+    <label id="research-row">
+      <input type="checkbox" id="research-input" checked>
+      <span data-i18n="research_text">Partager anonymement ma trajectoire de pilotage pour la recherche (aucun nom ni email associ&eacute;).</span>
     </label>
     <div id="start-error" role="alert"></div>
 
@@ -9140,6 +9147,7 @@ window.addEventListener('keyup', (e) => {
   function resetStick() {
     stickNub.style.transform = 'translate(0, 0)';
     input.forward = input.backward = input.left = input.right = false;
+    window._tiStick = null;
   }
   function updateStick(clientX, clientY) {
     const rect = stickZone.getBoundingClientRect();
@@ -9149,6 +9157,7 @@ window.addEventListener('keyup', (e) => {
     const mag = Math.hypot(dx, dy);
     if (mag > STICK_R) { dx = dx / mag * STICK_R; dy = dy / mag * STICK_R; }
     stickNub.style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
+    window._tiStick = [dx / STICK_R, dy / STICK_R]; // analog value for the research recorder
     // Same deadzone shape as the gamepad mapping.
     const norm = Math.min(1, mag / STICK_R);
     const DZ = 0.18;
@@ -9567,7 +9576,7 @@ function pollGamepad() {
 // every required field. Email needs an external keyboard to type, but
 // at minimum A focuses it (kiosk setups usually have one plugged in).
 // On the checkbox A toggles consent. On a button A clicks it.
-const _MENU_FOCUSABLES = ['name-input', 'email-input', 'consent-input', 'start-btn', 'tutorial-btn'];
+const _MENU_FOCUSABLES = ['name-input', 'email-input', 'consent-input', 'research-input', 'start-btn', 'tutorial-btn'];
 let _menuFocusIdx = 0;
 function _menuFocusApply() {
   for (const id of _MENU_FOCUSABLES) {
@@ -9594,7 +9603,7 @@ function _menuFocusActivate() {
   if (!target) return;
   // Checkbox: A toggles. Default .click() works, but explicit so it's
   // obvious from this file what A does on each row.
-  if (target.id === 'consent-input') {
+  if (target.type === 'checkbox') {
     target.checked = !target.checked;
     try { target.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
     return;
@@ -11300,6 +11309,7 @@ function startHydronauteRecapScene() {
 }
 
 function showGameOver() {
+  try { _runRec.finish('complete'); } catch (e) {}
   stopOceanAmbient();
   stopMotorLoop();
   // End-menu Hydronaute theme — starts now, after the pre-ending
@@ -13664,6 +13674,8 @@ function gameLoop(timestamp) {
     _gameplayInput = Object.assign({}, effInput, { forward: false, backward: false, boost: false });
   }
   const isBoosting = movePlayer(localPlayer, _gameplayInput, dt, playerUpgrades);
+  // Research recorder: raw intent (`input`) vs what the boat actually got.
+  try { _runRec.tick(input, _gameplayInput); } catch (e) {}
   const _isAccel = !!(_gameplayInput.forward || _gameplayInput.backward);
   // Run the continuous motor loop only after ignition — before that the
   // only sound is the one-shot starter SFX.
@@ -15881,6 +15893,303 @@ const _CONSENT_URL = (() => {
   const host = 'trashure-island.basiloco.partykit.dev';
   return 'https://' + host + '/parties/main/consents';
 })();
+
+// ---- Research run recorder ----
+// Records the local player's piloting decisions for the behavioural
+// corpus (biutopic.com/journal/trashure-island-comportement). Anonymous
+// by construction: random per-run id, no name / email / leaderboard
+// link, start time rounded to the hour so a run can't be matched to a
+// consent record by timestamp. Uploaded in ~15 s chunks to the dedicated
+// "runs" room — separate storage from consents + scores. Unsent chunks
+// wait in localStorage (kiosks on flaky event wifi) and are retried on
+// the next load; re-posting a chunk overwrites it server-side.
+// Format: docs/RUNS_SCHEMA.md — bump RUN_SCHEMA_V on any change.
+const RUN_SCHEMA_V   = 1;
+const RUN_GAME_BUILD = 'v2-2026-10-29';
+const _RUNS_URL = (() => {
+  // ?runs=<url> points the recorder at a local `partykit dev` for testing.
+  try {
+    const o = new URLSearchParams(location.search).get('runs');
+    if (o) return o;
+  } catch (e) {}
+  return 'https://trashure-island.basiloco.partykit.dev/parties/main/runs';
+})();
+const RUN_PENDING_KEY = 'ti_run_pending';
+const RUN_PENDING_MAX_CHARS = 3000000; // ~3 MB of unsent chunks max on device
+const RUN_FRAME_DT  = 0.1;  // 10 Hz pilot frames
+const RUN_OBS_DT    = 0.2;  // 5 Hz world observations
+const RUN_CHUNK_SEC = 15;
+const RUN_WHALE_STATE = { surface: 0, diving: 1, submerged: 2, surfacing: 3 };
+
+// Event tag (?event=nantes-2026-06) survives REJOUER's location.replace,
+// which drops the query string — kiosks keep tagging every round.
+function _runEventTag() {
+  try {
+    const q = new URLSearchParams(location.search).get('event');
+    if (q && /^[a-z0-9-]{1,40}$/i.test(q)) sessionStorage.setItem('ti_event', q.toLowerCase());
+    return sessionStorage.getItem('ti_event') || '';
+  } catch (e) { return ''; }
+}
+
+const _runRec = (() => {
+  let run = null;          // current round's recording (null before the first frame)
+  let device = 'kb';       // last input device that produced input
+  let draining = false;
+  let memQueue = [];       // fallback when localStorage is unavailable
+
+  const q1 = (v) => Math.round((+v || 0) * 10);  // 0.1 world units
+  const qa = (a) => {                              // radians → mrad in [-π, π]
+    a = (+a || 0) % (2 * Math.PI);
+    if (a > Math.PI) a -= 2 * Math.PI; else if (a < -Math.PI) a += 2 * Math.PI;
+    return Math.round(a * 1000);
+  };
+  const bits = (i) => (i.forward ? 1 : 0) | (i.backward ? 2 : 0) | (i.left ? 4 : 0)
+                    | (i.right ? 8 : 0) | (i.boost ? 16 : 0) | (i.fire ? 32 : 0);
+  const tc = () => Math.round((gameTime - run.t0) * 100); // centiseconds since run start
+
+  function newRunId() {
+    let rnd = '';
+    try {
+      const a = new Uint8Array(10);
+      crypto.getRandomValues(a);
+      for (const b of a) rnd += (b % 36).toString(36);
+    } catch (e) { rnd = Math.random().toString(36).slice(2, 12); }
+    return Math.floor(Date.now() / 3600000).toString(36) + rnd;
+  }
+  // Per-run small-int ids. `kind` declares the entity once via an 'ent' event.
+  function eid(key, kind) {
+    let n = run.ids.get(key);
+    if (n === undefined) {
+      n = run.ids.size;
+      run.ids.set(key, n);
+      if (kind) run.e.push(['ent', tc(), n, kind]);
+    }
+    return n;
+  }
+  function activePad() {
+    try {
+      for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) if (gp && gp.connected) return gp;
+    } catch (e) {}
+    return null;
+  }
+  function noteDevice(d) {
+    if (d === device) return;
+    device = d;
+    if (run && !run.off && !run.fin) run.e.push(['dev', tc(), d]);
+  }
+  window.addEventListener('keydown', () => noteDevice('kb'), true);
+  window.addEventListener('touchstart', () => noteDevice('touch'), { capture: true, passive: true });
+
+  function start() {
+    const optIn = document.getElementById('research-input');
+    if (optIn && !optIn.checked) { run = { off: true }; return; }
+    run = {
+      rid: newRunId(), seq: 0, t0: gameTime, chunkT0: gameTime,
+      nextFrame: 0, nextObs: 0,
+      ids: new Map(), garbage: new Map(), mines: new Set(), bombs: new Set(),
+      upg: '', f: [], o: [], e: [],
+      hdr: {
+        v: RUN_SCHEMA_V, build: RUN_GAME_BUILD,
+        hour: Math.floor(Date.now() / 3600000) * 3600000,
+        lang: _currentLang,
+        mode: (_mp && _mp.roundLaunched) ? 'mp' : 'solo',
+        event: _runEventTag(),
+        device,
+        touch: ('ontouchstart' in window) || (navigator.maxTouchPoints | 0) > 0,
+        pad: !!activePad(),
+        view: [Math.round(innerWidth / 100) * 100, Math.round(innerHeight / 100) * 100],
+        lq: !!window.LQ_MODE,
+        world: { r: WORLD_RADIUS, island: ISLAND_RADIUS, dur: GAME_DURATION, maxHp: MAX_HEALTH },
+      },
+    };
+  }
+
+  function frame(rawInput, effInput) {
+    const p = localPlayer;
+    let a = null;
+    if (device === 'touch' && window._tiStick) a = window._tiStick;
+    else if (device === 'pad') {
+      const gp = activePad();
+      if (gp) a = [gp.axes[_GP_AXIS_LX] || 0, gp.axes[_GP_AXIS_LY] || 0];
+    }
+    let flags = bits(effInput);
+    if (respawnActive) flags |= 64;
+    if (upgradeActive) flags |= 128;
+    run.f.push([
+      tc(), q1(p.x), q1(p.z), qa(p.rotation),
+      Math.round(p.health), Math.round(p.boostEnergy * 100), p.boatLevel | 0, p.totalCollected | 0,
+      bits(rawInput), flags,
+      a ? Math.round(a[0] * 100) : 0, a ? Math.round(a[1] * 100) : 0,
+    ]);
+    const u = (playerUpgrades.solar_panel | 0) + ',' + (playerUpgrades.speed | 0) + ',' + (playerUpgrades.magnet | 0);
+    if (u !== run.upg) {
+      run.upg = u;
+      run.e.push(['up', tc(), playerUpgrades.solar_panel | 0, playerUpgrades.speed | 0, playerUpgrades.magnet | 0]);
+    }
+  }
+
+  function observe() {
+    const T = tc();
+    const ents = [];
+    for (const b of bots) {
+      const kind = b.isWhale ? 'whale' : (b.isHydro ? 'hydro' : 'bot');
+      const extra = b.isWhale ? (RUN_WHALE_STATE[whaleState] ?? -1) : Math.round(b.health || 0);
+      ents.push([eid(b.id, kind), q1(b.x), q1(b.z), qa(b.rotation), extra]);
+    }
+    for (const pr of pirates) {
+      ents.push([eid(pr.id, 'pirate'), q1(pr.x), q1(pr.z), qa(pr.rotation), (pr.emerged && !pr.diving) ? 1 : 0]);
+    }
+    if (_mp && _mp.roundLaunched && Array.isArray(_mp.seats)) {
+      _mp.seats.forEach((s, i) => {
+        if (!s || s.kind !== 'human' || i === _mp.mySeatIdx) return;
+        ents.push([eid('seat_' + i, 'human'), q1(s.x), q1(s.z), qa(s.rot), Math.round(s.health || 0)]);
+      });
+    }
+    run.o.push([T, ents]);
+
+    // Garbage, mines and bombs barely move — log add / move / remove
+    // instead of re-sending every piece 5 times a second.
+    const seen = new Set();
+    for (const g of garbage) {
+      const k = g.serverId ? 's' + g.serverId : g.id;
+      seen.add(k);
+      const last = run.garbage.get(k);
+      if (!last) {
+        run.garbage.set(k, [g.x, g.z]);
+        run.e.push(['g+', T, eid(k), q1(g.x), q1(g.z), g.points || 1, g.isHeal ? 1 : 0]);
+      } else if (Math.abs(g.x - last[0]) + Math.abs(g.z - last[1]) > 1) {
+        last[0] = g.x; last[1] = g.z;
+        run.e.push(['gm', T, eid(k), q1(g.x), q1(g.z)]);
+      }
+    }
+    for (const k of run.garbage.keys()) {
+      if (!seen.has(k)) { run.garbage.delete(k); run.e.push(['g-', T, eid(k)]); }
+    }
+    seen.clear();
+    for (const m of seaMines) {
+      seen.add(m.id);
+      if (!run.mines.has(m.id)) { run.mines.add(m.id); run.e.push(['m+', T, eid(m.id), q1(m.x), q1(m.z)]); }
+    }
+    for (const k of run.mines) if (!seen.has(k)) { run.mines.delete(k); run.e.push(['m-', T, eid(k)]); }
+    seen.clear();
+    for (const b of bombs) {
+      seen.add(b.id);
+      if (!run.bombs.has(b.id)) {
+        run.bombs.add(b.id);
+        run.e.push(['x+', T, eid(b.id), q1(b.targetX), q1(b.targetZ), q1(b.originX), q1(b.originZ)]);
+      }
+    }
+    for (const k of run.bombs) if (!seen.has(k)) { run.bombs.delete(k); run.e.push(['x-', T, eid(k)]); }
+  }
+
+  // ---- upload queue ----
+  function readQ() {
+    try {
+      const raw = localStorage.getItem(RUN_PENDING_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return memQueue.slice(); }
+  }
+  function writeQ(q) {
+    try {
+      if (q.length) localStorage.setItem(RUN_PENDING_KEY, JSON.stringify(q));
+      else localStorage.removeItem(RUN_PENDING_KEY);
+    } catch (e) { memQueue = q.slice(); }
+  }
+  function enqueue(text) {
+    const q = readQ();
+    q.push(text);
+    let total = q.reduce((n, s) => n + s.length, 0);
+    while (q.length > 1 && total > RUN_PENDING_MAX_CHARS) total -= q.shift().length;
+    writeQ(q);
+  }
+  // text/plain keeps it a CORS "simple" request (no preflight), which
+  // keepalive needs to survive page unload. 2xx = stored, 4xx = the
+  // server will never accept it — either way it leaves the queue.
+  function post(text) {
+    return fetch(_RUNS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: text,
+      keepalive: text.length < 60000,
+    }).then(r => !!r && (r.ok || (r.status >= 400 && r.status < 500)));
+  }
+  function drain() {
+    if (draining) return;
+    draining = true;
+    const step = () => {
+      const q = readQ();
+      if (!q.length) { draining = false; return; }
+      const text = q[0];
+      post(text).then(done => {
+        if (!done) { draining = false; return; }
+        const q2 = readQ();
+        const i = q2.indexOf(text);
+        if (i >= 0) { q2.splice(i, 1); writeQ(q2); }
+        step();
+      }).catch(() => { draining = false; });
+    };
+    step();
+  }
+
+  function flush(fin, reason) {
+    const body = { kind: 'run', v: RUN_SCHEMA_V, rid: run.rid, seq: run.seq++, fin: !!fin, f: run.f, o: run.o, e: run.e };
+    if (body.seq === 0) body.hdr = run.hdr;
+    if (fin) {
+      body.end = {
+        reason, t: tc(),
+        score: localPlayer.totalCollected | 0,
+        level: localPlayer.boatLevel | 0,
+      };
+      run.fin = true;
+    }
+    run.f = []; run.o = []; run.e = [];
+    run.chunkT0 = gameTime;
+    const text = JSON.stringify(body);
+    enqueue(text);
+    drain();
+    return text;
+  }
+
+  return {
+    // Called once per simulated frame, right after the player moved.
+    tick(rawInput, effInput) {
+      if (!run) start();
+      if (run.off || run.fin) return;
+      const t = gameTime - run.t0;
+      const gp = activePad();
+      if (gp) {
+        const lx = gp.axes[_GP_AXIS_LX] || 0, ly = gp.axes[_GP_AXIS_LY] || 0;
+        if (Math.abs(lx) > 0.3 || Math.abs(ly) > 0.3 || gp.buttons.some(b => b && b.pressed)) noteDevice('pad');
+      }
+      // Fixed-step schedule (not "dt since last sample", which drifts to
+      // ~8.6 Hz at 60 fps); after a long frame it resyncs instead of bursting.
+      if (t + 1e-4 >= run.nextFrame) {
+        frame(rawInput, effInput);
+        run.nextFrame = Math.max(run.nextFrame + RUN_FRAME_DT, t);
+      }
+      if (t + 1e-4 >= run.nextObs) {
+        observe();
+        run.nextObs = Math.max(run.nextObs + RUN_OBS_DT, t);
+      }
+      if (gameTime - run.chunkT0 >= RUN_CHUNK_SEC) flush(false);
+    },
+    finish(reason) {
+      if (!run || run.off || run.fin) return;
+      flush(true, reason);
+    },
+    // Page closing mid-round: the chunk is already queued for the next
+    // load; also fire it now with keepalive in case there is no next load.
+    abandon() {
+      if (!run || run.off || run.fin) return;
+      const text = flush(true, 'abandoned');
+      try { post(text).catch(() => {}); } catch (e) {}
+    },
+    drain,
+  };
+})();
+window.addEventListener('pagehide', () => { try { _runRec.abandon(); } catch (e) {} });
+window.addEventListener('online', () => { try { _runRec.drain(); } catch (e) {} });
+setTimeout(() => { try { _runRec.drain(); } catch (e) {} }, 4000);
 // ---- Global leaderboard ----
 // Offline-tolerant. The last successful fetch is cached in localStorage
 // so the menu shows real data even with no network. Score submissions
@@ -17046,6 +17355,7 @@ const I18N_STRINGS = {
     name_placeholder: 'Entre ton nom...',
     email_label: 'Email',
     consent_text: 'J\u2019accepte d\u2019\u00EAtre contact\u00E9 par BIUTOPIC et que mes donn\u00E9es de jeu soient utilis\u00E9es pour entra\u00EEner le mod\u00E8le de l\u2019Hydronaute IA.',
+    research_text: 'Partager anonymement ma trajectoire de pilotage pour la recherche (aucun nom ni email associé).',
     consent_err_email: 'Adresse email invalide.',
     consent_err_required: 'Tu dois cocher la case pour participer.',
     consent_err_network: 'Impossible d\u2019enregistrer ton consentement. R\u00E9essaye dans un instant.',
@@ -17185,6 +17495,7 @@ const I18N_STRINGS = {
     name_placeholder: 'Enter your name...',
     email_label: 'Email',
     consent_text: 'I consent to be contacted by BIUTOPIC and to have my gameplay data used to train the Hydronaute AI model.',
+    research_text: 'Share my steering anonymously for research (no name or email attached).',
     consent_err_email: 'Invalid email address.',
     consent_err_required: 'You must tick the box to play.',
     consent_err_network: 'Could not record your consent. Please try again in a moment.',

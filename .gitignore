@@ -35,3 +35,8 @@ _emails*.json
 _emails*.csv
 Trashure_Island_players.xlsx
 _build_xlsx.py
+
+# Research run exports — anonymous but bulky, keep out of git
+runs_export*/
+runs_local*/
+.partykit/
