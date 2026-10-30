@@ -36,8 +36,19 @@ def fetch_all(base, token, page_size):
             return
 
 
+def strip_score(chunk):
+    """Schema v1 recorded the score, which leads back to the public leaderboard."""
+    if chunk["v"] >= 2:
+        return
+    chunk["f"] = [row[:7] + [None] + row[8:] for row in chunk["f"]]
+    if chunk.get("end"):
+        chunk["end"].pop("score", None)
+
+
 def merge(chunks):
     chunks.sort(key=lambda c: c["seq"])
+    for c in chunks:
+        strip_score(c)
     run = {"rid": chunks[0]["rid"], "v": chunks[0]["v"], "hdr": None, "end": None,
            "chunks": len(chunks), "seqs": [c["seq"] for c in chunks],
            "f": [], "o": [], "e": []}

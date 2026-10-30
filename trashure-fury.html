@@ -15835,10 +15835,12 @@ const _CONSENT_URL = BACKEND_HTTP + '/parties/main/consents';
 // consent record by timestamp. Uploaded in ~15 s chunks to the dedicated
 // "runs" room — separate storage from consents + scores. Unsent chunks
 // wait in localStorage (kiosks on flaky event wifi) and are retried on
-// the next load; re-posting a chunk overwrites it server-side.
+// the next load; re-posting a chunk overwrites it server-side. The score
+// stays out of the recording on purpose: the public leaderboard shows it
+// next to a name, so it would work as a key from a run back to a player.
 // Format: docs/RUNS_SCHEMA.md — bump RUN_SCHEMA_V on any change.
-const RUN_SCHEMA_V   = 1;
-const RUN_GAME_BUILD = 'v2-2026-10-29';
+const RUN_SCHEMA_V   = 2;
+const RUN_GAME_BUILD = 'v2-2026-10-30';
 const _RUNS_URL = BACKEND_HTTP + '/parties/main/runs';
 const RUN_PENDING_KEY = 'ti_run_pending';
 const RUN_PENDING_MAX_CHARS = 3000000; // ~3 MB of unsent chunks max on device
@@ -15944,7 +15946,7 @@ const _runRec = (() => {
     if (upgradeActive) flags |= 128;
     run.f.push([
       tc(), q1(p.x), q1(p.z), qa(p.rotation),
-      Math.round(p.health), Math.round(p.boostEnergy * 100), p.boatLevel | 0, p.totalCollected | 0,
+      Math.round(p.health), Math.round(p.boostEnergy * 100), p.boatLevel | 0, roundStats.pieces,
       bits(rawInput), flags,
       a ? Math.round(a[0] * 100) : 0, a ? Math.round(a[1] * 100) : 0,
     ]);
@@ -16064,7 +16066,7 @@ const _runRec = (() => {
     if (fin) {
       body.end = {
         reason, t: tc(),
-        score: localPlayer.totalCollected | 0,
+        pieces: roundStats.pieces,
         level: localPlayer.boatLevel | 0,
       };
       run.fin = true;

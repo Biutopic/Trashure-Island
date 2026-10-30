@@ -1,4 +1,4 @@
-# Trashure Island research runs — schema v1
+# Trashure Island research runs — schema v2
 
 One **run** = one player's 3-minute round, recorded from the end of the countdown
 to the game-over screen (or the page closing). Recorder: `_runRec` in
@@ -6,8 +6,11 @@ to the game-over screen (or the page closing). Recorder: `_runRec` in
 
 ## Privacy
 
-- Random per-run id (`rid`), regenerated every round. Nothing links a run to a
-  name, email, leaderboard entry or another run from the same device.
+- Random per-run id (`rid`), regenerated every round. A run shares no identifier
+  with a name, an email, a leaderboard entry or another run from the same device.
+- The score is not recorded. The public leaderboard shows it next to a name, so
+  in a run it would work as a key back to a player. `pieces` counts the plastic
+  picked up instead, without the combo multipliers.
 - Start time and server receive time are rounded to the hour, so a run can't be
   matched to a consent record by timestamp.
 - No user agent, IP or exact screen size is stored. The viewport is rounded to 100 px.
@@ -54,7 +57,7 @@ dropped first) and are retried on the next load or `online` event.
 
 ## `f`: pilot frames, 10 Hz
 
-`[t, x, z, heading, hp, boost%, level, score, raw, eff, ax, ay]`
+`[t, x, z, heading, hp, boost%, level, pieces, raw, eff, ax, ay]`
 
 - `raw`: what the player pressed. `eff`: what the boat received. They differ
   while the engine is cranking and during respawn.
@@ -88,7 +91,13 @@ time and the nearest boat in `f` / `o` at that moment.
 
 ## `end`: final chunk only
 
-`{ reason: "complete" | "abandoned", t, score, level }`
+`{ reason: "complete" | "abandoned", t, pieces, level }`
+
+## Versions
+
+- **v1** (30 Oct 2026, first hours): column 7 of `f` and `end.score` held the
+  score. `scripts/export_runs.py` removes both, so no export contains them.
+- **v2**: `pieces` in both places.
 
 ## Caveats for analysis
 
@@ -99,3 +108,7 @@ time and the nearest boat in `f` / `o` at that moment.
   Most players at events are first-timers.
 - The in-game Hydronaute (`hydro`) follows a scripted loop. It is not the real
   autopilot.
+- Before publishing the corpus, review re-identification again: the score can in
+  principle be rebuilt from `g-` events, piece values and the combo rules, so the
+  leaderboard stays a possible cross-reference. Coarsening or dropping `points`
+  in the published version closes that.
