@@ -1369,55 +1369,6 @@
       z-index: 2;
       pointer-events: none;
     }
-    /* Lightweight scan visual — replaces the 3D boat with a charging/progress
-       bar so the recap reads as "AI analysing your run" without spinning up
-       a second WebGL renderer. */
-    .hydronaute-scan {
-      position: relative;
-      margin: -4px auto 14px;
-      padding: 14px 14px 10px;
-      background:
-        radial-gradient(ellipse at 50% 50%, rgba(0,255,200,0.12) 0%, rgba(0,180,255,0.05) 45%, transparent 80%),
-        linear-gradient(180deg, rgba(0,40,60,0.35), rgba(0,30,50,0.15));
-      border: 1px solid rgba(0, 255, 200, 0.2);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    .hydronaute-scan-label {
-      font-family: var(--font-heading); font-size: 0.6rem;
-      letter-spacing: 2px; color: rgba(0, 255, 200, 0.65);
-    }
-    .hydronaute-scan-id {
-      position: absolute; top: 14px; right: 14px;
-      font-family: var(--font-heading); font-size: 0.6rem;
-      letter-spacing: 2px; color: rgba(0, 255, 200, 0.4);
-    }
-    .hydronaute-scan-bar {
-      margin-top: 10px; height: 10px;
-      background: rgba(0, 0, 0, 0.45);
-      border: 1px solid rgba(0, 255, 200, 0.22);
-      border-radius: 6px;
-      overflow: hidden; position: relative;
-    }
-    .hydronaute-scan-fill {
-      position: absolute; top: 0; left: -40%;
-      width: 40%; height: 100%;
-      background: linear-gradient(90deg,
-        rgba(0, 255, 200, 0) 0%,
-        rgba(0, 255, 200, 0.9) 50%,
-        rgba(0, 255, 200, 0) 100%);
-      animation: hydroScanSweep 2.2s cubic-bezier(0.45, 0.02, 0.55, 0.98) infinite;
-    }
-    @keyframes hydroScanSweep {
-      0%   { left: -40%; }
-      100% { left: 100%; }
-    }
-    .hydronaute-scan-readout {
-      margin-top: 8px;
-      font-family: var(--font-heading); font-size: 0.65rem;
-      letter-spacing: 1px; color: rgba(160, 230, 240, 0.7);
-      text-align: left;
-    }
     .science-header {
       font-family: var(--font-heading);
       font-size: 0.85rem; font-weight: 700;
@@ -1438,27 +1389,11 @@
       display: flex; justify-content: space-between;
       font-size: 0.78rem;
     }
+    @media (max-width: 480px) {
+      .science-stats { grid-template-columns: 1fr; gap: 6px; }
+    }
     .science-stat-label { color: var(--muted-fg); }
-    .science-stat-value { color: #00ffcc; font-weight: 600; font-family: var(--font-heading); font-size: 0.75rem; }
-    .science-progress {
-      margin-bottom: 12px;
-    }
-    .science-progress-label {
-      display: flex; justify-content: space-between;
-      font-size: 0.7rem; margin-bottom: 4px;
-    }
-    .science-progress-label span:first-child { color: var(--muted-fg); }
-    .science-progress-label span:last-child { color: #00ffcc; font-family: var(--font-heading); font-weight: 700; }
-    .science-progress-bar {
-      width: 100%; height: 6px; border-radius: 3px;
-      background: rgba(0,255,200,0.1);
-      overflow: hidden;
-    }
-    .science-progress-fill {
-      height: 100%; border-radius: 3px;
-      background: linear-gradient(90deg, #00ffcc, #00d4ff);
-      transition: width 1.5s ease;
-    }
+    .science-stat-value { color: #00ffcc; font-weight: 600; font-family: var(--font-heading); font-size: 0.75rem; white-space: nowrap; }
     .science-insight {
       font-size: 0.75rem; color: rgba(200,230,255,0.7);
       border-top: 1px solid rgba(0,255,200,0.1);
@@ -2429,18 +2364,9 @@
 
   <!-- Science recap -->
   <div class="science-recap glass-panel" id="science-recap">
-    <div class="science-header" data-i18n="science_header">RAPPORT D'ENTRA&Icirc;NEMENT IA</div>
-    <div class="science-subtitle" data-i18n="science_subtitle">Donn&eacute;es g&eacute;n&eacute;r&eacute;es pour l'apprentissage de l'Hydronaute</div>
-    <!-- Data-scan visualization: pulsing progress bar + scan-line loop,
-         replaces the 3D boat for a lighter recap. -->
-    <div class="hydronaute-scan" id="hydronaute-scan">
-      <div class="hydronaute-scan-label" data-i18n="science_scan_label">HYDRONAUTE // ANALYSE</div>
-      <div class="hydronaute-scan-id">ID&#x00A0;#R8000</div>
-      <div class="hydronaute-scan-bar"><div class="hydronaute-scan-fill"></div></div>
-      <div class="hydronaute-scan-readout" id="hydronaute-scan-readout" data-i18n="science_scan_readout">// Corr&eacute;lation des donn&eacute;es de mission...</div>
-    </div>
+    <div class="science-header" data-i18n="science_header">RAPPORT DE PILOTAGE</div>
+    <div class="science-subtitle" id="science-subtitle"></div>
     <div class="science-stats" id="science-stats"></div>
-    <div class="science-progress" id="science-progress"></div>
     <div class="science-insight" id="science-insight"></div>
   </div>
 
@@ -2918,22 +2844,64 @@ const HYDRO_THOUGHTS = [
 ];
 let hydroLearnScore = 0; // increases as it collects/survives
 
-// ---- Hydronaute telemetry for science recap ----
-const hydroTelemetry = {
-  collisionsReceived: 0,    // times Hydronaute was hit
-  evasionsTriggered: 0,     // times evade mode activated
-  evasionsSuccessful: 0,    // evade mode ended without collision
-  obstaclesAvoided: 0,      // island/boundary avoidance maneuvers
-  decisionsTotal: 0,        // total navigation decisions
-  modeChanges: 0,           // switches between collect/evade
-  distanceTraveled: 0,      // total distance in units
-  boostUsed: 0,             // times boost was used
-  bombsEvaded: 0,           // bombs that exploded near but didn't hit
-  minesEvaded: 0,           // mines avoided
-  lastMode: 'collect',
-  lastX: 0, lastZ: 0,
-  evasionStartHealth: 0,    // HP when evasion began
+// ---- Round stats for the end-screen pilot report ----
+// Everything here is measured from the local player's round. Independent
+// of the research recorder, so the report still works after an opt-out.
+const ROUND_WHALE_NEAR   = 60; // a surfaced whale closer than this is a threat
+const ROUND_PIRATE_NEAR  = 35; // same for an emerged pirate
+const ROUND_THREAT_CLEAR = 15; // extra distance needed before it counts as avoided
+const roundStats = {
+  pieces: 0,          // pieces of plastic picked up (not the combo score)
+  distance: 0,        // world units sailed
+  hits: 0,            // times the player lost health
+  wrecks: 0,
+  threats: 0,         // close encounters with the whale or a pirate
+  threatsAvoided: 0,  // of which the player got away without a hit
+  whaleNearest: Infinity,
+  lastX: null, lastZ: 0, lastHp: 0,
+  wasRespawning: false, threatActive: false, threatHit: false,
 };
+function updateRoundStats() {
+  const s = roundStats, p = localPlayer;
+  const hit = s.lastX !== null && p.health < s.lastHp;
+  if (s.lastX !== null && !respawnActive) {
+    const step = Math.hypot(p.x - s.lastX, p.z - s.lastZ);
+    if (step < 10) s.distance += step; // ignore respawn teleports
+  }
+  s.lastX = p.x; s.lastZ = p.z; s.lastHp = p.health;
+  if (hit) s.hits++;
+  if (respawnActive && !s.wasRespawning) s.wrecks++;
+  s.wasRespawning = respawnActive;
+
+  // `gap` = distance to the nearest threat's "near" radius; negative = inside.
+  let gap = Infinity;
+  if (whaleState === 'surface') {
+    for (const b of bots) {
+      if (!b.isWhale) continue;
+      const d = Math.hypot(b.x - p.x, b.z - p.z);
+      s.whaleNearest = Math.min(s.whaleNearest, d);
+      gap = Math.min(gap, d - ROUND_WHALE_NEAR);
+    }
+  }
+  for (const pr of pirates) {
+    if (!pr.emerged || pr.diving) continue;
+    gap = Math.min(gap, Math.hypot(pr.x - p.x, pr.z - p.z) - ROUND_PIRATE_NEAR);
+  }
+  if (!s.threatActive && gap < 0) {
+    s.threatActive = true; s.threatHit = false; s.threats++;
+  }
+  if (s.threatActive) {
+    if (hit) s.threatHit = true;
+    if (gap === Infinity) {
+      // The threat dived away: the player didn't avoid anything.
+      s.threatActive = false;
+      if (!s.threatHit) s.threats--;
+    } else if (gap > ROUND_THREAT_CLEAR) {
+      s.threatActive = false;
+      if (!s.threatHit) s.threatsAvoided++;
+    }
+  }
+}
 
 // Model templates (filled by GLTF loader or null => procedural)
 let boatModelTemplate = null;      // (legacy, kept for fallback)
@@ -4469,6 +4437,7 @@ function checkGarbageCollection(player, upgrades) {
       if (!g.serverId) continue;
       if (pointInOBB(g.x, g.z, obbMp, marginMp)) {
         g._claimed = true; // local suppression so we don't spam picks on the same piece
+        roundStats.pieces++;
         try { _mp.ws.send(JSON.stringify({ type: 'pick', id: g.serverId | 0 })); } catch (e) {}
         // --- Optimistic local heal + boost ---
         // The server does the scoring and broadcasts an authoritative
@@ -4501,6 +4470,7 @@ function checkGarbageCollection(player, upgrades) {
     if (g.excludeId === player.id && gameTime < (g.excludeUntil || 0)) continue;
     if (pointInOBB(g.x, g.z, obb, margin)) {
       collected.push(g.id);
+      if (player.id === 'local') roundStats.pieces++;
       const basePts = g.points || 1;
 
       // Combo — multiply points for consecutive pickups
@@ -11366,113 +11336,69 @@ function showGameOver() {
     ? tr('go_champion')
     : tr('go_rank_label') + ': #' + rank + ' ' + tr('go_rank_of') + ' ' + allEntries.length;
 
-  // ---- Science recap: Hydronaute AI training report ----
-  // We replaced the 3D boat hologram with a CSS scan-bar animation (one less
-  // WebGL context + fewer matrix-share bugs), so no renderer to spin up.
-
+  // ---- Pilot report ----
+  // Every number was measured during this round (see roundStats). Nothing
+  // here describes an AI: the in-game Hydronaute follows a scripted route.
+  const sciSubtitle = document.getElementById('science-subtitle');
   const sciStats    = document.getElementById('science-stats');
-  const sciProgress = document.getElementById('science-progress');
   const sciInsight  = document.getElementById('science-insight');
 
   const gameDurationMin = Math.floor(gameTime / 60);
   const gameDurationSec = Math.floor(gameTime % 60);
   const durationStr = gameDurationMin + tr('go_duration_min') + ' ' + String(gameDurationSec).padStart(2, '0') + tr('go_duration_sec');
-  const t = hydroTelemetry;
+  const rs = roundStats;
+  const runInfo = _runRec.summary();
+  // An encounter still running at the final whistle has no outcome yet.
+  const threatsResolved = rs.threats - ((rs.threatActive && !rs.threatHit) ? 1 : 0);
+  const avoidRate = threatsResolved > 0 ? Math.round((rs.threatsAvoided / threatsResolved) * 100) : 0;
+  const whaleMet = Number.isFinite(rs.whaleNearest);
+  const whaleNearest = Math.round(rs.whaleNearest);
+  const distanceStr = rs.distance >= 1000
+    ? (rs.distance / 1000).toLocaleString(_currentLang, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' km'
+    : Math.round(rs.distance) + ' m';
 
-  // Most telemetry counters aren't wired into gameplay yet — rather than
-  // showing zeros, synthesize sensible numbers from the values we DO track
-  // (gameTime, collisions, hydroLearnScore). These are deterministic and
-  // feel authentic: a 3-minute session will always show ~22 epochs, ~60
-  // obstacles, etc. Real tracked values take priority when non-zero.
-  const collisions    = t.collisionsReceived | 0;
-  const obstaclesAvoided = Math.max(t.obstaclesAvoided | 0, Math.floor(gameTime * 0.35));
-  const evasionsTriggered  = Math.max(t.evasionsTriggered  | 0, Math.floor(gameTime / 20) + collisions);
-  const evasionsSuccessful = Math.max(t.evasionsSuccessful | 0,
-    Math.max(0, evasionsTriggered - collisions));
-  const evasionRate = evasionsTriggered > 0
-    ? Math.round((evasionsSuccessful / evasionsTriggered) * 100) : 0;
-  const bombsEvaded = t.bombsEvaded | 0;
-  const minesEvaded = t.minesEvaded | 0;
-  // Training epochs: one epoch per ~8s — flavors "the AI trained every few seconds"
-  const epochs = Math.max(1, Math.floor(gameTime / 8));
-  // Data points: decisions + learnScore + observations. Monotonic with session length.
-  const dataPoints = Math.max(t.decisionsTotal | 0, Math.floor(gameTime * 3.2))
-                   + obstaclesAvoided
-                   + evasionsTriggered
-                   + (hydroLearnScore | 0);
-  // Distance: if untracked, derive from ~14 u/s avg Hydronaute speed
-  const distU = t.distanceTraveled > 1 ? t.distanceTraveled : gameTime * 14;
-  const distanceKm = (distU / 1000).toFixed(2);
+  if (sciSubtitle) {
+    sciSubtitle.textContent = tr(runInfo.shared ? 'science_sub_shared' : 'science_sub_private');
+  }
 
   if (sciStats) {
     const row = (label, value) =>
       '<div class="science-stat"><span class="science-stat-label">' + label +
       '</span><span class="science-stat-value">' + value + '</span></div>';
     sciStats.innerHTML =
-      row(tr('go_stat_plastic'),     localPlayer.totalCollected) +
-      row(tr('go_stat_duration'),    durationStr) +
-      row(tr('go_stat_epochs'),      epochs) +
-      row(tr('go_stat_data'),        dataPoints) +
-      row(tr('go_stat_collisions'),  collisions) +
-      row(tr('go_stat_evasions'),    evasionsSuccessful + ' / ' + evasionsTriggered) +
-      row(tr('go_stat_obstacles'),   obstaclesAvoided) +
-      row(tr('go_stat_distance'),    distanceKm + ' km');
-  }
-
-  if (sciProgress) {
-    // A progress bar for "training confidence" — blend of evasion rate,
-    // inverse collisions, and obstacles avoided. Makes the AI feel like
-    // it's getting smarter each run.
-    const collisionPenalty = Math.min(100, collisions * 12);
-    const confidence = Math.max(5, Math.min(100,
-      evasionRate * 0.5 + Math.min(100, obstaclesAvoided * 4) * 0.3 + (100 - collisionPenalty) * 0.2
-    ));
-    sciProgress.innerHTML =
-      '<div class="science-progress-label">' +
-        '<span>' + tr('go_stat_confidence') + '</span>' +
-        '<span>' + Math.round(confidence) + ' %</span>' +
-      '</div>' +
-      '<div class="science-progress-bar">' +
-        '<div class="science-progress-fill" style="width:' + Math.round(confidence) + '%"></div>' +
-      '</div>';
+      row(tr('go_stat_plastic'),  rs.pieces) +
+      row(tr('go_stat_duration'), durationStr) +
+      row(tr('go_stat_distance'), distanceStr) +
+      row(tr('go_stat_hits'),     rs.hits) +
+      row(tr('go_stat_wrecks'),   rs.wrecks) +
+      row(tr('go_stat_threats'),  rs.threatsAvoided + ' / ' + threatsResolved) +
+      row(tr('go_stat_whale'),    whaleMet ? whaleNearest + ' m' : '\u2014') +
+      row(tr('go_stat_points'),   runInfo.shared ? runInfo.frames : tr('go_stat_not_shared'));
   }
 
   if (sciInsight) {
-    // Pick the most relevant insight based on WHAT dominated this session.
-    // Each insight reads as advice the AI derived from the player's play.
+    // Plain observations about this round, nothing the data can't back up.
     const insights = [];
     const fmt = (key, vars) => {
       let s = tr(key);
-      if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
+      for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
       return s;
     };
-    if (collisions >= 3) {
-      insights.push(tr('go_insight_collisions'));
+    if (threatsResolved >= 3) {
+      if (avoidRate >= 70) insights.push(fmt('go_insight_avoid_high', { X: avoidRate }));
+      else if (avoidRate < 40) insights.push(fmt('go_insight_avoid_low', { X: avoidRate }));
     }
-    if (evasionRate >= 70 && evasionsTriggered >= 3) {
-      insights.push(fmt('go_insight_evasion_high', { X: evasionRate }));
-    } else if (evasionRate < 40 && evasionsTriggered >= 3) {
-      insights.push(fmt('go_insight_evasion_low', { X: evasionRate }));
+    if (whaleMet && whaleNearest < ROUND_WHALE_NEAR) {
+      insights.push(fmt('go_insight_whale', { N: whaleNearest }));
     }
-    if (obstaclesAvoided >= 10) {
-      insights.push(fmt('go_insight_obstacles', { N: obstaclesAvoided }));
-    }
-    if (minesEvaded >= 1) {
-      insights.push(tr('go_insight_mines'));
-    }
-    if (bombsEvaded >= 2) {
-      insights.push(fmt('go_insight_bombs', { N: bombsEvaded }));
-    }
-    if (localPlayer.totalCollected >= 80) {
-      insights.push(tr('go_insight_collect_high'));
-    } else if (localPlayer.totalCollected < 25) {
+    if (rs.pieces >= 40) {
+      insights.push(fmt('go_insight_collect_high', { N: rs.pieces }));
+    } else if (rs.pieces < 10) {
       insights.push(tr('go_insight_collect_low'));
-    }
-    if (insights.length === 0) {
-      insights.push(tr('go_insight_archived'));
     }
     // Show up to 2 top insights joined with a soft separator
     sciInsight.innerHTML = insights.slice(0, 2).join(' &mdash; ');
+    sciInsight.hidden = insights.length === 0;
   }
 
   overlay.classList.add('active');
@@ -13676,6 +13602,7 @@ function gameLoop(timestamp) {
   const isBoosting = movePlayer(localPlayer, _gameplayInput, dt, playerUpgrades);
   // Research recorder: raw intent (`input`) vs what the boat actually got.
   try { _runRec.tick(input, _gameplayInput); } catch (e) {}
+  updateRoundStats();
   const _isAccel = !!(_gameplayInput.forward || _gameplayInput.backward);
   // Run the continuous motor loop only after ignition — before that the
   // only sound is the one-shot starter SFX.
@@ -14120,7 +14047,6 @@ function gameLoop(timestamp) {
         const events = pirateRamCheck(pirate, allPlayers, gameTime);
         for (const e of events) {
           spawnFloatingText(e.x, e.z, e.text, e.color);
-          if (e.victimId === 'whale') hydroTelemetry.collisionsReceived++;
         }
       }
       if (pirate.emerged) addBoatWake(pirate.id, pirate.x, pirate.z, pirate.vx, pirate.vz, RIPPLE_PIRATE_AMP);
@@ -14129,7 +14055,6 @@ function gameLoop(timestamp) {
     const res = updatePirate(pirate, allPlayers, dt * (_dda.pirateSpeedMul || 1), gameTime);
     for (const e of res.events) {
       spawnFloatingText(e.x, e.z, e.text, e.color);
-      if (e.victimId === 'whale') hydroTelemetry.collisionsReceived++;
     }
     bombs.push(...res.newBombs);
     // Pirate ship wake (bigger)
@@ -14141,7 +14066,6 @@ function gameLoop(timestamp) {
   const bEvts = updateBombs(dt, gameTime, allPlayers);
   for (const e of bEvts) {
     spawnFloatingText(e.x, e.z, e.text, e.color);
-    if (e.victimId === 'whale') hydroTelemetry.bombsEvaded--;
   }
 
   // ---- FIREBALLS ----
@@ -14168,7 +14092,6 @@ function gameLoop(timestamp) {
   const cEvts = checkBoatCollisions(allPlayers, gameTime);
   for (const e of cEvts) {
     spawnFloatingText(e.x, e.z, e.text, e.color);
-    if (e.victimId === 'whale') hydroTelemetry.collisionsReceived++;
   }
 
   // ---- ISLAND COLLISION (players, bots AND pirates) ----
@@ -15988,7 +15911,7 @@ const _runRec = (() => {
     if (optIn && !optIn.checked) { run = { off: true }; return; }
     run = {
       rid: newRunId(), seq: 0, t0: gameTime, chunkT0: gameTime,
-      nextFrame: 0, nextObs: 0,
+      nextFrame: 0, nextObs: 0, frames: 0,
       ids: new Map(), garbage: new Map(), mines: new Set(), bombs: new Set(),
       upg: '', f: [], o: [], e: [],
       hdr: {
@@ -16009,6 +15932,7 @@ const _runRec = (() => {
 
   function frame(rawInput, effInput) {
     const p = localPlayer;
+    run.frames++;
     let a = null;
     if (device === 'touch' && window._tiStick) a = window._tiStick;
     else if (device === 'pad') {
@@ -16188,6 +16112,11 @@ const _runRec = (() => {
       try { post(text).catch(() => {}); } catch (e) {}
     },
     drain,
+    // For the end-screen report.
+    summary() {
+      const on = !!run && !run.off;
+      return { shared: on, frames: on ? run.frames : 0 };
+    },
   };
 })();
 window.addEventListener('pagehide', () => { try { _runRec.abandon(); } catch (e) {} });
@@ -17415,34 +17344,29 @@ const I18N_STRINGS = {
     go_score_label: 'Score',
     go_rank_label: 'Rang',
     go_rank_of: 'sur',
-    go_plastic_suffix: 'plastiques collect\u00E9s',
+    go_plastic_suffix: 'points',
     go_replay: 'REJOUER',
-    science_header: 'RAPPORT D\u2019ENTRA\u00CENEMENT IA',
-    science_subtitle: 'Donn\u00E9es g\u00E9n\u00E9r\u00E9es pour l\u2019apprentissage de l\u2019Hydronaute',
-    science_scan_label: 'HYDRONAUTE // ANALYSE',
-    science_scan_readout: '// Corr\u00E9lation des donn\u00E9es de mission...',
+    science_header: 'RAPPORT DE PILOTAGE',
+    science_sub_shared: 'Ta trajectoire anonyme rejoint l\u2019\u00E9tude comportementale de BIUTOPIC.',
+    science_sub_private: 'Trajectoire non partag\u00E9e : rien n\u2019a \u00E9t\u00E9 envoy\u00E9 \u00E0 la recherche.',
     // Science recap stat rows
     go_stat_plastic: 'Plastique collect\u00E9',
     go_stat_duration: 'Dur\u00E9e de session',
-    go_stat_epochs: '\u00C9poques IA',
-    go_stat_data: 'Donn\u00E9es apprises',
-    go_stat_collisions: 'Collisions IA',
-    go_stat_evasions: '\u00C9vasions r\u00E9ussies',
-    go_stat_obstacles: 'Obstacles \u00E9vit\u00E9s',
-    go_stat_distance: 'Distance IA',
-    go_stat_confidence: 'Confiance du mod\u00E8le',
+    go_stat_distance: 'Distance parcourue',
+    go_stat_hits: 'Coups re\u00E7us',
+    go_stat_wrecks: 'Naufrages',
+    go_stat_threats: 'Menaces \u00E9vit\u00E9es',
+    go_stat_whale: 'Baleine au plus pr\u00E8s',
+    go_stat_points: 'Points enregistr\u00E9s',
+    go_stat_not_shared: 'Non partag\u00E9s',
+    go_insight_avoid_high: '{X} % des menaces \u00E9vit\u00E9es : tu gardes tes distances.',
+    go_insight_avoid_low: 'Seulement {X} % des menaces \u00E9vit\u00E9es : elles t\u2019ont souvent rattrap\u00E9.',
+    go_insight_whale: 'La baleine est pass\u00E9e \u00E0 {N} m de toi.',
+    go_insight_collect_high: 'Belle collecte : {N} morceaux de plastique remont\u00E9s.',
+    go_insight_collect_low: 'Peu de plastique ramass\u00E9 sur cette partie.',
     go_duration_min: 'min',
     go_duration_sec: 's',
     // Science recap insights (use {X} / {N} tokens for substitution)
-    go_insight_collisions: 'Renforcement appris : \u00E9viter les boat kamikazes. Le mod\u00E8le ajuste sa distance de s\u00E9curit\u00E9.',
-    go_insight_evasion_high: 'Strat\u00E9gie d\u2019\u00E9vasion valid\u00E9e \u00E0 {X} %. L\u2019IA int\u00E8gre ce sch\u00E9ma dans son apprentissage.',
-    go_insight_evasion_low: 'Taux d\u2019\u00E9vasion faible ({X} %). Le mod\u00E8le doit anticiper plus t\u00F4t les trajectoires.',
-    go_insight_obstacles: 'Cartographie enrichie : {N} obstacles r\u00E9f\u00E9renc\u00E9s pour futurs entra\u00EEnements.',
-    go_insight_mines: 'Mines d\u00E9tect\u00E9es et contourn\u00E9es \u2014 signatures ajout\u00E9es \u00E0 la base de menaces.',
-    go_insight_bombs: 'Pr\u00E9diction de projectiles pirates am\u00E9lior\u00E9e par {N} observations.',
-    go_insight_collect_high: 'Efficacit\u00E9 humaine \u00E9lev\u00E9e : le mod\u00E8le copie votre sch\u00E9ma de collecte optimal.',
-    go_insight_collect_low: 'Peu de donn\u00E9es de collecte. L\u2019IA demande une session plus longue pour g\u00E9n\u00E9raliser.',
-    go_insight_archived: 'Session archiv\u00E9e. Chaque partie enrichit le r\u00E9seau neuronal de l\u2019Hydronaute.',
     // Loading
     loading_status: 'Chargement des mod\u00E8les...',
     loading_loaded_suffix: ' charg\u00E9',
@@ -17555,32 +17479,27 @@ const I18N_STRINGS = {
     go_score_label: 'Score',
     go_rank_label: 'Rank',
     go_rank_of: 'of',
-    go_plastic_suffix: 'plastic collected',
+    go_plastic_suffix: 'points',
     go_replay: 'REPLAY',
-    science_header: 'AI TRAINING REPORT',
-    science_subtitle: 'Data generated for the Hydronaute\u2019s learning',
-    science_scan_label: 'HYDRONAUTE // ANALYSIS',
-    science_scan_readout: '// Correlating mission data...',
+    science_header: 'PILOT REPORT',
+    science_sub_shared: 'Your anonymous trajectory joins BIUTOPIC\u2019s behavioural study.',
+    science_sub_private: 'Trajectory not shared: nothing was sent to the research.',
     go_stat_plastic: 'Plastic collected',
     go_stat_duration: 'Session duration',
-    go_stat_epochs: 'AI epochs',
-    go_stat_data: 'Data learned',
-    go_stat_collisions: 'AI collisions',
-    go_stat_evasions: 'Evasions succeeded',
-    go_stat_obstacles: 'Obstacles avoided',
-    go_stat_distance: 'AI distance',
-    go_stat_confidence: 'Model confidence',
+    go_stat_distance: 'Distance sailed',
+    go_stat_hits: 'Hits taken',
+    go_stat_wrecks: 'Shipwrecks',
+    go_stat_threats: 'Threats avoided',
+    go_stat_whale: 'Closest to the whale',
+    go_stat_points: 'Points recorded',
+    go_stat_not_shared: 'Not shared',
+    go_insight_avoid_high: '{X}% of threats avoided: you keep your distance.',
+    go_insight_avoid_low: 'Only {X}% of threats avoided: they often caught you.',
+    go_insight_whale: 'The whale came within {N} m of you.',
+    go_insight_collect_high: 'Strong haul: {N} pieces of plastic recovered.',
+    go_insight_collect_low: 'Not much plastic picked up this round.',
     go_duration_min: 'min',
     go_duration_sec: 's',
-    go_insight_collisions: 'Reinforcement learned: avoid kamikaze boats. The model adjusts its safety margin.',
-    go_insight_evasion_high: 'Evasion strategy validated at {X}%. The AI integrates this pattern into its learning.',
-    go_insight_evasion_low: 'Low evasion rate ({X}%). The model must anticipate trajectories earlier.',
-    go_insight_obstacles: 'Map enriched: {N} obstacles referenced for future training.',
-    go_insight_mines: 'Mines detected and avoided \u2014 signatures added to the threat database.',
-    go_insight_bombs: 'Pirate projectile prediction improved by {N} observations.',
-    go_insight_collect_high: 'High human efficiency: the model copies your optimal collection pattern.',
-    go_insight_collect_low: 'Little collection data. The AI requests a longer session to generalize.',
-    go_insight_archived: 'Session archived. Every run enriches the Hydronaute\u2019s neural network.',
     // Loading
     loading_status: 'Loading models...',
     loading_loaded_suffix: ' loaded',
@@ -17629,7 +17548,7 @@ let _currentLang = (typeof localStorage !== 'undefined' && localStorage.getItem(
 // Tiny runtime translator — every non-DOM-static string routes through this.
 // Falls back to French, then to the key itself if the phrase is missing.
 // Named `tr` because the game has existing local vars called `t` inside
-// render functions (e.g. hydroTelemetry alias).
+// render functions.
 function tr(key) {
   const d = I18N_STRINGS[_currentLang] || I18N_STRINGS.fr;
   if (d[key] != null) return d[key];
