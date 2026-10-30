@@ -1,18 +1,20 @@
-// Trashure Island — PartyKit room server.
+// Trashure Island — room server.
 //
 // Milestone 1 + 1.5 scope: lobby + round state machine + Ready button.
 // Up to 4 human seats per room; empty seats are placeholder "bot" seats
 // so the leaderboard is always 4-wide. A later milestone will network
 // the full world state (pirates, garbage, combat).
 //
-// Deploy:  npx partykit deploy
-// Dev:     npx partykit dev
+// Runs as a PartyServer Durable Object on Cloudflare (hosted PartyKit
+// shut down on 2026-10-23). From this folder:
+// Deploy:  npx wrangler deploy
+// Dev:     npx wrangler dev
 //
-// Client opens:  wss://trashure-island.<username>.partykit.dev/parties/main/<roomId>
+// Client opens:  wss://<worker host>/parties/main/<roomId>
 // Rooms are segregated by path; v1 always uses roomId="global" so every
 // player lands in the same ocean. Custom room codes can be added later.
 
-import type * as Party from "partykit/server";
+import { Server, routePartykitRequest, type Connection, type ConnectionContext, type WSMessage } from "partyserver";
 
 // Always-on world: there is a single PLAYING phase. Each player has a
 // personal 3-min session timer that starts on connect / rejoin. No
@@ -208,7 +210,7 @@ const SPAM_PATTERNS = [
 // ---- Research runs (room "runs") ----
 // Anonymous piloting recordings posted by the browser game, one record
 // per ~15 s chunk. Format: docs/RUNS_SCHEMA.md.
-const RUN_MAX_CHUNK_CHARS = 110_000; // DO storage caps a value at 128 KiB
+const RUN_MAX_CHUNK_CHARS = 110_000; // far above the ~20 KB the client sends
 const RUN_MAX_SEQ         = 99;
 const RUN_EXPORT_MAX      = 200;
 
@@ -273,8 +275,8 @@ function humanCount(state: RoomState): number {
   return state.seats.filter((s) => s.kind === "human").length;
 }
 
-export default class TrashureRoom implements Party.Server {
-  state: RoomState;
+export class TrashureRoom extends Server<Env> {
+  state: RoomState = initialState();
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   // Shared garbage field. Not stored on state because it's large +
   // has its own lifecycle (spawn / claim / despawn); we broadcast
@@ -310,10 +312,6 @@ export default class TrashureRoom implements Party.Server {
   private entryNextId = 1;
 
 
-  constructor(readonly room: Party.Room) {
-    this.state = initialState();
-  }
-
   // --- GARBAGE ---
   private spawnGarbageAround() {
     // Pick a spot in the annulus between the island pad and world edge.
@@ -327,7 +325,7 @@ export default class TrashureRoom implements Party.Server {
       claimed: false,
     };
     this.garbage.push(g);
-    this.room.broadcast(JSON.stringify({ type: "g_add", items: [{ id: g.id, x: g.x, z: g.z, k: g.kind }] }));
+    this.broadcast(JSON.stringify({ type: "g_add", items: [{ id: g.id, x: g.x, z: g.z, k: g.kind }] }));
   }
   private ensureGarbageField() {
     // Initial fill when a round starts.
@@ -335,7 +333,7 @@ export default class TrashureRoom implements Party.Server {
   }
   private clearGarbageField() {
     this.garbage.length = 0;
-    this.room.broadcast(JSON.stringify({ type: "g_reset" }));
+    this.broadcast(JSON.stringify({ type: "g_reset" }));
   }
   private tickGarbage(dt: number) {
     if (this.state.phase !== "PLAYING") return;
@@ -346,7 +344,7 @@ export default class TrashureRoom implements Party.Server {
     }
   }
   // Send the full garbage field to one connection (used on connect).
-  private sendGarbageSnapshot(conn: Party.Connection) {
+  private sendGarbageSnapshot(conn: Connection) {
     const items = this.garbage.map(g => ({ id: g.id, x: g.x, z: g.z, k: g.kind }));
     try { conn.send(JSON.stringify({ type: "g_snap", items })); } catch {}
   }
@@ -417,7 +415,7 @@ export default class TrashureRoom implements Party.Server {
         const p = this.spawnPirate();
         this.pirates.push(p);
         this.pirateRespawnAt = 0;
-        this.room.broadcast(JSON.stringify({ type: "p_add", p: this.pirateWire(p) }));
+        this.broadcast(JSON.stringify({ type: "p_add", p: this.pirateWire(p) }));
       }
     }
 
@@ -430,7 +428,7 @@ export default class TrashureRoom implements Party.Server {
         state: "submerged",
         nextStateAt: now + 8000,
       };
-      this.room.broadcast(JSON.stringify({ type: "whale", w: this.whaleWire() }));
+      this.broadcast(JSON.stringify({ type: "whale", w: this.whaleWire() }));
     }
     if (this.whale && now >= this.whale.nextStateAt) {
       const seq: Whale["state"][] = ["submerged","surfacing","surface","diving"];
@@ -448,13 +446,13 @@ export default class TrashureRoom implements Party.Server {
         this.whale.z = Math.sin(a) * 70 + (Math.random() - 0.5) * 40;
         this.whale.rot = Math.random() * Math.PI * 2;
       }
-      this.room.broadcast(JSON.stringify({ type: "whale", w: this.whaleWire() }));
+      this.broadcast(JSON.stringify({ type: "whale", w: this.whaleWire() }));
     }
 
     // Hydronaute spawns once and orbits slowly.
     if (!this.hydro && elapsed >= HYDRO_SPAWN_MS) {
       this.hydro = { x: 130, z: 0, rot: Math.PI, waypointIdx: 0 };
-      this.room.broadcast(JSON.stringify({ type: "hydro", h: this.hydroWire() }));
+      this.broadcast(JSON.stringify({ type: "hydro", h: this.hydroWire() }));
     }
     if (this.hydro) {
       // Simple orbit around world origin.
@@ -515,7 +513,7 @@ export default class TrashureRoom implements Party.Server {
             piId: p.id,
           };
           this.bombs.push(b);
-          this.room.broadcast(JSON.stringify({ type: "b_add", b: this.bombWire(b) }));
+          this.broadcast(JSON.stringify({ type: "b_add", b: this.bombWire(b) }));
           p.lastBombAt = now + PIRATE_BOMB_INTERVAL * (0.6 + Math.random() * 0.8);
         }
       }
@@ -527,7 +525,7 @@ export default class TrashureRoom implements Party.Server {
         const mz = p.z - Math.cos(p.rot) * behind;
         const m: Mine = { id: this.mineNextId++, x: mx, z: mz, armedAt: now + 800 };
         this.mines.push(m);
-        this.room.broadcast(JSON.stringify({ type: "m_add", m: this.mineWire(m) }));
+        this.broadcast(JSON.stringify({ type: "m_add", m: this.mineWire(m) }));
         p.lastMineAt = now + PIRATE_MINE_INTERVAL * (0.7 + Math.random() * 0.6);
       }
     }
@@ -538,7 +536,7 @@ export default class TrashureRoom implements Party.Server {
       const b = this.bombs[i];
       if (now >= b.endAt) {
         this.bombs.splice(i, 1);
-        this.room.broadcast(JSON.stringify({ type: "b_exp", id: b.id, x: b.targetX, z: b.targetZ }));
+        this.broadcast(JSON.stringify({ type: "b_exp", id: b.id, x: b.targetX, z: b.targetZ }));
       }
     }
   }
@@ -583,7 +581,7 @@ export default class TrashureRoom implements Party.Server {
     };
   }
   // Snapshot of world for a fresh client: one message with everything.
-  private sendWorldSnapshot(conn: Party.Connection) {
+  private sendWorldSnapshot(conn: Connection) {
     const msg = {
       type: "w_snap",
       pirates: this.pirates.map(p => this.pirateWire(p)),
@@ -645,7 +643,7 @@ export default class TrashureRoom implements Party.Server {
     const e = this.entries.find(x => x.entryId === entryId);
     if (!e || e.sessionEndedAt !== null) return;
     e.sessionEndedAt = now;
-    this.room.broadcast(JSON.stringify({
+    this.broadcast(JSON.stringify({
       type: "e_end", id: e.entryId, at: now, score: e.score,
     }));
   }
@@ -686,13 +684,13 @@ export default class TrashureRoom implements Party.Server {
   // Broadcast a freshly-added entry to all viewers whose cohort
   // includes it (trivially: everyone alive now).
   private broadcastEntryAdd(e: SessionEntry) {
-    this.room.broadcast(JSON.stringify({ type: "e_add", e: this.entryWire(e) }));
+    this.broadcast(JSON.stringify({ type: "e_add", e: this.entryWire(e) }));
   }
 
   // Send the full cohort-filtered entries list to one connection.
   // Used on connect / reconnect so the joining client starts with a
   // consistent leaderboard.
-  private sendEntriesSnapshot(conn: Party.Connection) {
+  private sendEntriesSnapshot(conn: Connection) {
     const seat = this.findSeatByConn(conn.id);
     const seatIdx = seat ? this.state.seats.indexOf(seat) : -1;
     const entries = this.entriesForViewer(seatIdx);
@@ -731,7 +729,7 @@ export default class TrashureRoom implements Party.Server {
   // record into the durable-object storage keyed by a timestamped
   // id so the admin can list/export later. CORS allowed so the
   // GitHub Pages site can reach us directly from the browser.
-  async onRequest(req: Party.Request): Promise<Response> {
+  async onRequest(req: Request): Promise<Response> {
     const cors: Record<string, string> = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
@@ -740,7 +738,7 @@ export default class TrashureRoom implements Party.Server {
     if (req.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: cors });
     }
-    if (this.room.id === "runs") return this.onRunsRequest(req, cors);
+    if (this.name === "runs") return this.onRunsRequest(req, cors);
     // GET ?action=admin&token=... → dump full score records (name +
     // score + email + at). Used to verify that the menu's email gate
     // is actually capturing emails. Token-protected because email
@@ -750,15 +748,14 @@ export default class TrashureRoom implements Party.Server {
       const url0 = new URL(req.url);
       const adminAction = url0.searchParams.get("action");
       if (adminAction === "admin" || adminAction === "purge_anon" || adminAction === "purge_name") {
-        const ADMIN_TOKEN = (this.room as any).env.ADMIN_TOKEN as string;
+        const ADMIN_TOKEN = this.env.ADMIN_TOKEN;
         if (!ADMIN_TOKEN || url0.searchParams.get("token") !== ADMIN_TOKEN) {
           return new Response(JSON.stringify({ ok: false, err: "forbidden" }), {
             status: 403, headers: { ...cors, "Content-Type": "application/json" },
           });
         }
         try {
-          // @ts-ignore — runtime storage
-          const all = await (this.room as any).storage.list({ prefix: "score:" });
+          const all = await this.ctx.storage.list({ prefix: "score:" });
           const rows: any[] = [];
           const purgeKeys: string[] = [];
           for (const [k, v] of (all as Map<string, any>).entries()) {
@@ -769,8 +766,7 @@ export default class TrashureRoom implements Party.Server {
           }
           if (adminAction === "purge_anon") {
             for (const k of purgeKeys) {
-              // @ts-ignore
-              await (this.room as any).storage.delete(k);
+              await this.ctx.storage.delete(k);
             }
             return new Response(JSON.stringify({ ok: true, purged: purgeKeys.length }), {
               status: 200, headers: { ...cors, "Content-Type": "application/json" },
@@ -788,8 +784,7 @@ export default class TrashureRoom implements Party.Server {
               if (v && v.name === target) toDel.push(k);
             }
             for (const k of toDel) {
-              // @ts-ignore
-              await (this.room as any).storage.delete(k);
+              await this.ctx.storage.delete(k);
             }
             return new Response(JSON.stringify({ ok: true, purged: toDel.length }), {
               status: 200, headers: { ...cors, "Content-Type": "application/json" },
@@ -798,15 +793,13 @@ export default class TrashureRoom implements Party.Server {
           rows.sort((a, b) => b.score - a.score || a.at - b.at);
           // Pull rejected attempts too so the admin can see why a score
           // didn't land.
-          // @ts-ignore
-          const allRejects = await (this.room as any).storage.list({ prefix: "reject:" });
+          const allRejects = await this.ctx.storage.list({ prefix: "reject:" });
           const rejects: any[] = [];
           for (const v of (allRejects as Map<string, any>).values()) rejects.push(v);
           rejects.sort((a, b) => b.at - a.at);
           // Pull consent records too — every email that's ever started
           // a game lives here, independent of whether they finished.
-          // @ts-ignore
-          const allConsents = await (this.room as any).storage.list({ prefix: "consent:" });
+          const allConsents = await this.ctx.storage.list({ prefix: "consent:" });
           const consents: any[] = [];
           for (const v of (allConsents as Map<string, any>).values()) consents.push(v);
           consents.sort((a, b) => (b.at || 0) - (a.at || 0));
@@ -832,8 +825,7 @@ export default class TrashureRoom implements Party.Server {
       if (url.searchParams.get("action") === "top") {
         const limit = Math.max(1, Math.min(50, Number(url.searchParams.get("limit") || 10)));
         try {
-          // @ts-ignore — runtime storage
-          const all = await (this.room as any).storage.list({ prefix: "score:" });
+          const all = await this.ctx.storage.list({ prefix: "score:" });
           const rows: Array<{ name: string; score: number; at: number }> = [];
           for (const v of (all as Map<string, any>).values()) {
             if (v && typeof v.score === "number" && typeof v.name === "string") {
@@ -881,16 +873,13 @@ export default class TrashureRoom implements Party.Server {
             };
             const k = "reject:" + Date.now().toString(36).padStart(10, "0")
                     + ":" + Math.random().toString(36).slice(2, 6);
-            // @ts-ignore
-            await (this.room as any).storage.put(k, rec);
+            await this.ctx.storage.put(k, rec);
             // Trim: keep newest 50
-            // @ts-ignore
-            const all = await (this.room as any).storage.list({ prefix: "reject:" });
+            const all = await this.ctx.storage.list({ prefix: "reject:" });
             const keys = Array.from((all as Map<string, any>).keys()).sort();
             if (keys.length > 50) {
               for (const old of keys.slice(0, keys.length - 50)) {
-                // @ts-ignore
-                await (this.room as any).storage.delete(old);
+                await this.ctx.storage.delete(old);
               }
             }
           } catch {}
@@ -918,8 +907,7 @@ export default class TrashureRoom implements Party.Server {
         // can all fire for the same round; we only want one row.
         const now = Date.now();
         try {
-          // @ts-ignore — runtime storage
-          const recent = await (this.room as any).storage.list({ prefix: "score:" });
+          const recent = await this.ctx.storage.list({ prefix: "score:" });
           for (const v of (recent as Map<string, any>).values()) {
             if (v && v.email === email && v.score === score &&
                 typeof v.at === "number" && (now - v.at) < 60000) {
@@ -941,8 +929,7 @@ export default class TrashureRoom implements Party.Server {
                   + ":" + now.toString(36).padStart(10, "0")
                   + ":" + Math.random().toString(36).slice(2, 6);
         try {
-          // @ts-ignore — runtime storage
-          await (this.room as any).storage.put(key, rec);
+          await this.ctx.storage.put(key, rec);
         } catch (e) {
           return new Response(JSON.stringify({ ok: false, err: "storage" }), {
             status: 500, headers: { ...cors, "Content-Type": "application/json" },
@@ -982,9 +969,7 @@ export default class TrashureRoom implements Party.Server {
       const key = "consent:" + now.toString(36).padStart(10, "0") + ":"
                 + Math.random().toString(36).slice(2, 8);
       try {
-        // @ts-ignore — Party.Storage is provided by the runtime; the
-        // local stub doesn't declare it, but the actual server has it.
-        await (this.room as any).storage.put(key, rec);
+        await this.ctx.storage.put(key, rec);
       } catch (e) {
         return new Response(JSON.stringify({ ok: false, err: "storage" }), {
           status: 500, headers: { ...cors, "Content-Type": "application/json" },
@@ -1012,12 +997,11 @@ export default class TrashureRoom implements Party.Server {
   //        are idempotent. Receive time is rounded to the hour.
   //   GET ?action=runs_export&token=…&after=<key>&limit=N → chunks in
   //        key order, paged; `next` is the `after` for the next page.
-  async onRunsRequest(req: Party.Request, cors: Record<string, string>): Promise<Response> {
+  async onRunsRequest(req: Request, cors: Record<string, string>): Promise<Response> {
     const json = (obj: unknown, status = 200) => new Response(JSON.stringify(obj), {
       status, headers: { ...cors, "Content-Type": "application/json" },
     });
-    // @ts-ignore — runtime storage
-    const storage = (this.room as any).storage;
+    const storage = this.ctx.storage;
     if (req.method === "POST") {
       const text = await req.text();
       if (text.length > RUN_MAX_CHUNK_CHARS) return json({ ok: false, err: "too_big" }, 413);
@@ -1039,7 +1023,7 @@ export default class TrashureRoom implements Party.Server {
     if (req.method === "GET") {
       const url = new URL(req.url);
       if (url.searchParams.get("action") !== "runs_export") return json({ ok: true, room: "runs" });
-      const ADMIN_TOKEN = (this.room as any).env.ADMIN_TOKEN as string;
+      const ADMIN_TOKEN = this.env.ADMIN_TOKEN;
       if (!ADMIN_TOKEN || url.searchParams.get("token") !== ADMIN_TOKEN) {
         return json({ ok: false, err: "forbidden" }, 403);
       }
@@ -1061,7 +1045,7 @@ export default class TrashureRoom implements Party.Server {
   }
 
   // ---- lifecycle ----
-  onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
+  onConnect(conn: Connection, ctx: ConnectionContext) {
     // Client sends a persistent id in the WS URL query. On reconnect
     // (e.g. short network drop), we match on pid and re-seat the same
     // player — we keep their active session (timer, score, entry)
@@ -1138,7 +1122,8 @@ export default class TrashureRoom implements Party.Server {
     this.sendEntriesSnapshot(conn);
   }
 
-  onMessage(msg: string, conn: Party.Connection) {
+  onMessage(conn: Connection, msg: WSMessage) {
+    if (typeof msg !== "string") return;
     let data: any;
     try { data = JSON.parse(msg); } catch { return; }
 
@@ -1199,7 +1184,7 @@ export default class TrashureRoom implements Party.Server {
         vz: Number(data.vz) || 0,
         charge: Math.max(0, Math.min(1, Number(data.charge) || 0)),
       };
-      this.room.broadcast(JSON.stringify(out), [conn.id]); // skip sender
+      this.broadcast(JSON.stringify(out), [conn.id]); // skip sender
       return;
     }
 
@@ -1233,7 +1218,7 @@ export default class TrashureRoom implements Party.Server {
       const entry = this.entries.find(e => e.entryId === seat.currentEntryId);
       if (entry) entry.score = seat.score;
       if (g.kind === 1) seat.health = Math.min(seat.maxHealth, seat.health + 25);
-      this.room.broadcast(JSON.stringify({
+      this.broadcast(JSON.stringify({
         type: "g_pick", id: g.id, by: seatIdx,
         k: g.kind, s: seat.score, h: seat.health, p: pts,
         // Entry id so clients can update the correct leaderboard row
@@ -1282,7 +1267,7 @@ export default class TrashureRoom implements Party.Server {
         wantPts -= pts;
       }
       if (items.length) {
-        this.room.broadcast(JSON.stringify({ type: "g_add", items }));
+        this.broadcast(JSON.stringify({ type: "g_add", items }));
       }
       const dropped = items.reduce((s, it) => s + (it.p || 1), 0);
       seat.score = Math.max(0, seat.score - dropped);
@@ -1313,12 +1298,12 @@ export default class TrashureRoom implements Party.Server {
         // pirate after PIRATE_RESPAWN_MS has elapsed — always-on
         // world means there is always exactly one (modulo cooldown).
         this.pirateRespawnAt = Date.now() + PIRATE_RESPAWN_MS;
-        this.room.broadcast(JSON.stringify({
+        this.broadcast(JSON.stringify({
           type: "p_kill", id: pid, x: p.x, z: p.z,
           attacker: this.state.seats.indexOf(attackerSeat),
         }));
       } else {
-        this.room.broadcast(JSON.stringify({ type: "p_dmg", id: pid, h: p.health, dmg }));
+        this.broadcast(JSON.stringify({ type: "p_dmg", id: pid, h: p.health, dmg }));
       }
       return;
     }
@@ -1336,7 +1321,7 @@ export default class TrashureRoom implements Party.Server {
         if (dx * dx + dz * dz > 20 * 20) return;
       }
       this.mines.splice(idx, 1);
-      this.room.broadcast(JSON.stringify({ type: "m_exp", id: mid, x: m.x, z: m.z }));
+      this.broadcast(JSON.stringify({ type: "m_exp", id: mid, x: m.x, z: m.z }));
       return;
     }
 
@@ -1361,7 +1346,7 @@ export default class TrashureRoom implements Party.Server {
       const attackerIdx = attackerSeat && attackerSeat.kind === "human"
         ? this.state.seats.indexOf(attackerSeat)
         : -1;
-      this.room.broadcast(JSON.stringify({
+      this.broadcast(JSON.stringify({
         type: "hit",
         target: targetIdx,
         attacker: attackerIdx,
@@ -1373,7 +1358,7 @@ export default class TrashureRoom implements Party.Server {
       // client plays the sink effect and resets health to max.
       if (target.health <= 0) {
         target.health = target.maxHealth;
-        this.room.broadcast(JSON.stringify({
+        this.broadcast(JSON.stringify({
           type: "sink",
           target: targetIdx,
         }));
@@ -1389,7 +1374,7 @@ export default class TrashureRoom implements Party.Server {
       const e = this.entries.find(x => x.entryId === seat.currentEntryId);
       if (e) {
         e.name = seat.name;
-        this.room.broadcast(JSON.stringify({ type: "e_upd", id: e.entryId, name: e.name }));
+        this.broadcast(JSON.stringify({ type: "e_upd", id: e.entryId, name: e.name }));
       }
       this.broadcastState();
       return;
@@ -1421,7 +1406,7 @@ export default class TrashureRoom implements Party.Server {
     }
   }
 
-  onClose(conn: Party.Connection) {
+  onClose(conn: Connection) {
     const idx = this.state.seats.findIndex(
       (s) => s.kind === "human" && s.id === conn.id
     );
@@ -1453,7 +1438,7 @@ export default class TrashureRoom implements Party.Server {
 
   // Drop human seats that haven't sent a message (heartbeat or otherwise)
   // for longer than GHOST_TIMEOUT_MS. Covers the case where a tab died
-  // without sending a WS close frame — PartyKit may still list the
+  // without sending a WS close frame — the runtime may still list the
   // connection as alive, so we can't trust getConnections() alone.
   private reapGhostSeats(): boolean {
     const now = Date.now();
@@ -1493,7 +1478,7 @@ export default class TrashureRoom implements Party.Server {
         this.endEntry(s.currentEntryId, now);
         // Tell the owning connection privately so only they see the
         // "your session ended, rejoin?" overlay.
-        const conn = [...this.room.getConnections()].find(c => c.id === s.id);
+        const conn = [...this.getConnections()].find(c => c.id === s.id);
         if (conn) {
           try { conn.send(JSON.stringify({ type: "session_end", score: s.score, entryId: s.currentEntryId })); } catch {}
         }
@@ -1587,7 +1572,7 @@ export default class TrashureRoom implements Party.Server {
     const hash = hashParts.join('|');
     if (hash === this.lastPoseHash) return;
     this.lastPoseHash = hash;
-    this.room.broadcast(JSON.stringify({ type: "poses", poses, world }));
+    this.broadcast(JSON.stringify({ type: "poses", poses, world }));
   }
 
   // ---- helpers ----
@@ -1608,8 +1593,18 @@ export default class TrashureRoom implements Party.Server {
     return name;
   }
   private broadcastState() {
-    this.room.broadcast(JSON.stringify({ type: "state", state: this.state }));
+    this.broadcast(JSON.stringify({ type: "state", state: this.state }));
   }
 }
 
-TrashureRoom satisfies Party.Worker;
+export default {
+  async fetch(req: Request, env: Env): Promise<Response> {
+    // DO_JURISDICTION (wrangler.jsonc) keeps player emails and scores in the
+    // EU. Rooms created under another jurisdiction are different Durable
+    // Objects, so changing it later would orphan their data. Empty in
+    // .dev.vars because local workerd doesn't implement jurisdictions.
+    const jurisdiction = (env.DO_JURISDICTION || undefined) as DurableObjectJurisdiction | undefined;
+    return (await routePartykitRequest(req, env, { jurisdiction }))
+      ?? new Response("Not Found", { status: 404 });
+  },
+} satisfies ExportedHandler<Env>;

@@ -11,7 +11,7 @@ to the game-over screen (or the page closing). Recorder: `_runRec` in
 - Start time and server receive time are rounded to the hour, so a run can't be
   matched to a consent record by timestamp.
 - No user agent, IP or exact screen size is stored. The viewport is rounded to 100 px.
-- Stored in its own PartyKit room. It never shares storage with consents or scores.
+- Stored in its own server room, in the EU. It never shares storage with consents or scores.
 - Opt-out: the "research" checkbox on the start menu is ticked by default and
   resets on every page load, so one kiosk player unticking it doesn't opt out
   the next player.

@@ -1,11 +1,11 @@
-"""Export Trashure Island research runs from the PartyKit "runs" room.
+"""Export Trashure Island research runs from the server's "runs" room.
 
 Pages through ?action=runs_export, regroups the ~15 s chunks by run id
 and writes one JSON file per run (chunks merged in order) plus a summary.
 
-    set TI_ADMIN_TOKEN=...            (same ADMIN_TOKEN as the PartyKit env)
+    set TI_ADMIN_TOKEN=...            (the Worker's ADMIN_TOKEN secret)
     python scripts/export_runs.py --out runs_export
-    python scripts/export_runs.py --base http://127.0.0.1:1999/parties/main/runs --out runs_local
+    python scripts/export_runs.py --base http://127.0.0.1:8787/parties/main/runs --out runs_local
 
 Exports stay out of git (.gitignore: runs_export*/). Format: docs/RUNS_SCHEMA.md.
 """
@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 from collections import defaultdict
 
-DEFAULT_BASE = "https://trashure-island.basiloco.partykit.dev/parties/main/runs"
+DEFAULT_BASE = "https://trashure-island.elven-6eb.workers.dev/parties/main/runs"
 
 
 def fetch_all(base, token, page_size):

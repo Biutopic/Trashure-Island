@@ -1,100 +1,72 @@
-# Trashure Island — PartyKit server
+# Trashure Island — game server
 
-Real-time server for the multiplayer lobby / round state machine.
+Runs on Cloudflare as a [PartyServer](https://github.com/cloudflare/partykit/tree/main/packages/partyserver)
+Durable Object. It moved here after hosted PartyKit shut down on 23 Oct 2026 and
+deleted its data.
 
-## What it does (today, Milestone 1 + 1.5)
+## What it does
 
-- Runs a state machine per room: `LOBBY → COUNTDOWN → PLAYING → RECAP → LOBBY`.
-- Assigns players to one of four seats. Empty seats are filled by `bot` placeholders so the leaderboard grid is always 4-wide.
-- Tracks per-player "Ready" state. When every human is ready, the lobby countdown short-circuits to ~1.5 s.
-- Drops a human seat back to a bot seat on disconnect; the round keeps running with whoever is there.
-- Ignores rooms with zero humans (no bot-only games = no wasted compute).
+One Durable Object per room, reached at `/parties/main/<room>`:
 
-**Gameplay itself is not yet networked.** Each client runs its own local simulation during the `PLAYING` phase. Milestone 2+ will move the world state (pirates, whale, garbage, scoring, combat) into this server.
+| Room | Purpose |
+|---|---|
+| `global` | Multiplayer world over WebSocket: seats, sessions, garbage, pirates, whale |
+| `consents` | Email consents and the leaderboard. Holds personal data |
+| `runs` | Anonymous research recordings, see `docs/RUNS_SCHEMA.md` |
+
+Storage stays in the EU (`DO_JURISDICTION` in `wrangler.jsonc`). Don't change that
+value once the server holds data: rooms under another jurisdiction are different
+objects, so the existing data would become unreachable.
+
+The admin endpoints need the `ADMIN_TOKEN` secret:
+
+- `consents?action=admin&token=…`
+- `runs?action=runs_export&token=…` (or use `scripts/export_runs.py`)
 
 ## Deploy
 
-### First time (one-time, from your machine)
+### First time, from your machine
 
 ```bash
-cd <repo-root>
-npx partykit@latest login      # opens a browser, auth with GitHub
-npx partykit@latest deploy
+cd party
+npm ci
+npx wrangler login
+npx wrangler deploy
+npx wrangler secret put ADMIN_TOKEN
 ```
 
-PartyKit will print a URL like `https://trashure-island.<your-github-username>.partykit.dev`. Update `MP_DEFAULT_HOST` in `trashure-fury.html` to match.
+`wrangler deploy` prints the Worker URL. Put its host in `BACKEND_HOST` in
+`trashure-fury.html` and `DEFAULT_BASE` in `scripts/export_runs.py`. Those are the
+only two places the address lives.
 
-### After that (auto-deploy via GitHub Actions)
+### After that
 
-The `.github/workflows/deploy-party.yml` workflow redeploys PartyKit on every push that changes `party/`, `partykit.json`, or the workflow itself. No more manual deploys.
+`.github/workflows/deploy-party.yml` redeploys on every push to `main` that changes
+`party/`. It needs two repo secrets at
+<https://github.com/Biutopic/Trashure-Island/settings/secrets/actions>:
 
-**One-time secret setup** in the repo's GitHub settings:
-
-1. Open **https://github.com/Biutopic/Trashure-Island/settings/secrets/actions**
-2. Click **New repository secret**, add two secrets:
-
-   | Name | Value |
-   |------|-------|
-   | `PARTYKIT_LOGIN` | Your PartyKit username (e.g. `basiloco`) |
-   | `PARTYKIT_TOKEN` | The `access_token` value from `~/.partykit/config.json` |
-
-3. Where to find the token (Windows):
-   - Open `C:\Users\<you>\.partykit\config.json` in Notepad
-   - Copy the value of `"access_token"` (long string, don't include the quotes)
-   - Paste as `PARTYKIT_TOKEN`
-   - The `login` field in the same file is what goes in `PARTYKIT_LOGIN`
-
-4. Trigger a deploy to verify: push any small change under `party/` OR open the **Actions** tab and manually run **"Deploy PartyKit server"** via the *workflow_dispatch* button.
-
-If you ever rotate the token (`npx partykit logout && login`), update the `PARTYKIT_TOKEN` secret with the new value.
+| Name | Value |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → My Profile → API Tokens → "Edit Cloudflare Workers" template |
+| `CLOUDFLARE_ACCOUNT_ID` | Shown on the Workers overview page |
 
 ## Local development
 
 ```bash
-npx partykit dev
-# then in another shell:
-npx vite
-# open http://localhost:8080/trashure-fury.html?mp=ws://127.0.0.1:1999/parties/main/global
+cd party
+npm ci
+cp .dev.vars.example .dev.vars
+npx wrangler dev --port 8787
 ```
 
-The `?mp=` query string overrides the production WebSocket URL.
+Then serve the repo root with any static server and open
+`trashure-fury.html?backend=127.0.0.1:8787`. The `?backend=` override only works on
+localhost. Local workerd doesn't implement jurisdictions, which is why
+`.dev.vars` leaves `DO_JURISDICTION` empty.
 
-## Protocol (client ↔ server)
+`npm run typecheck` regenerates the binding types and runs `tsc`.
 
-### Client → server
+## Changing the Durable Object class
 
-```jsonc
-{ "type": "hello", "name": "Captain" }          // sent on connect
-{ "type": "ready", "value": true }              // lobby phase only
-```
-
-### Server → client
-
-```jsonc
-{ "type": "spectator" }                         // 5th+ connection
-{ "type": "state", "state": { /* RoomState */ } }
-```
-
-`RoomState` shape:
-
-```ts
-{
-  phase: 'LOBBY' | 'COUNTDOWN' | 'PLAYING' | 'RECAP',
-  phaseEndsAt: number,          // epoch ms
-  seats: [                       // always length 4
-    { kind: 'human', id, name, ready, color } |
-    { kind: 'bot',   name, color } |
-    { kind: 'empty' }
-  ]
-}
-```
-
-## Next milestones
-
-2. Server-side world state (pirates, whale, hydronaute, garbage).
-3. Boat movement sync + client prediction.
-4. Pickups + scoring (server-authoritative).
-5. Fireballs + bombs + mines + damage with friendly fire.
-6. Shared recap.
-7. Seat-swap mid-round (bot seat takes over when a human leaves).
-8. Polish: spectator view, reconnect, rate limits.
+Wrangler doesn't generate migrations. If you add, rename or remove a server class,
+add an entry to `migrations` in `wrangler.jsonc`.

@@ -40,3 +40,8 @@ _build_xlsx.py
 runs_export*/
 runs_local*/
 .partykit/
+
+# Cloudflare server: local state, local secrets, generated types
+.wrangler/
+.dev.vars
+worker-configuration.d.ts

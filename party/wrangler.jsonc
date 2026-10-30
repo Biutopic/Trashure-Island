@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "trashure-island",
+  "main": "main.ts",
+  "compatibility_date": "2026-10-23",
+  "compatibility_flags": ["nodejs_compat"],
+  // The binding name sets the URL: "Main" serves /parties/main/<room>,
+  // the same paths the game already uses.
+  "durable_objects": {
+    "bindings": [{ "name": "Main", "class_name": "TrashureRoom" }]
+  },
+  // Wrangler doesn't generate these. Add an entry for every class added,
+  // renamed or removed. SQLite storage is what the free plan allows.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TrashureRoom"] }],
+  "vars": { "DO_JURISDICTION": "eu" },
+  "observability": { "enabled": true }
+}

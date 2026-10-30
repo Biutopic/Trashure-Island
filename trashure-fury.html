@@ -14944,10 +14944,25 @@ nameInput.value = _generateCaptainName();
 // Gameplay itself is still local in this milestone — next milestones
 // will move world state to the server.
 //
-// The URL below points to the user's PartyKit deployment. Override
-// with `?mp=wss://...` in the page URL for local dev.
-const MP_DEFAULT_HOST = 'trashure-island.basiloco.partykit.dev';
-const MP_ROOM_ID      = 'global';
+// BACKEND_HOST is the one place the server address lives: multiplayer,
+// consents, leaderboard and research runs all derive from it. Override
+// with `?mp=wss://...` in the page URL to test multiplayer alone. On
+// localhost only, `?backend=127.0.0.1:8787` points everything at
+// `wrangler dev` — never honoured on the public site, where a crafted
+// link could otherwise send player emails to someone else's server.
+const BACKEND_HOST = (() => {
+  try {
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+      const b = new URLSearchParams(location.search).get('backend');
+      if (b) return b;
+    }
+  } catch (e) {}
+  return 'trashure-island.elven-6eb.workers.dev';
+})();
+const _BACKEND_LOCAL = /^(localhost|127\.0\.0\.1)(:|$)/.test(BACKEND_HOST);
+const BACKEND_HTTP = (_BACKEND_LOCAL ? 'http://' : 'https://') + BACKEND_HOST;
+const BACKEND_WS   = (_BACKEND_LOCAL ? 'ws://' : 'wss://') + BACKEND_HOST;
+const MP_ROOM_ID   = 'global';
 
 const _mp = {
   ws: null,
@@ -15070,8 +15085,7 @@ function _mpResolveUrl() {
       return base + (base.includes('?') ? '&' : '?') + pidQ;
     }
   } catch (e) {}
-  const host = MP_DEFAULT_HOST;
-  return 'wss://' + host + '/parties/main/' + encodeURIComponent(MP_ROOM_ID) + '?' + pidQ;
+  return BACKEND_WS + '/parties/main/' + encodeURIComponent(MP_ROOM_ID) + '?' + pidQ;
 }
 
 function _mpGrabEls() {
@@ -15886,13 +15900,9 @@ window._beginSolo = beginSolo;
 // the durable-object storage there. The game only proceeds after
 // the POST succeeds — if the server is unreachable the player sees
 // an error and can retry.
-const _CONSENT_URL = (() => {
-  // Reuse the same PartyKit deployment the online MP uses, but POST
-  // to a dedicated "consents" room so the record key namespace is
-  // separated from gameplay state.
-  const host = 'trashure-island.basiloco.partykit.dev';
-  return 'https://' + host + '/parties/main/consents';
-})();
+// Same server as online MP, but a dedicated "consents" room so the
+// record key namespace is separated from gameplay state.
+const _CONSENT_URL = BACKEND_HTTP + '/parties/main/consents';
 
 // ---- Research run recorder ----
 // Records the local player's piloting decisions for the behavioural
@@ -15906,14 +15916,7 @@ const _CONSENT_URL = (() => {
 // Format: docs/RUNS_SCHEMA.md — bump RUN_SCHEMA_V on any change.
 const RUN_SCHEMA_V   = 1;
 const RUN_GAME_BUILD = 'v2-2026-10-29';
-const _RUNS_URL = (() => {
-  // ?runs=<url> points the recorder at a local `partykit dev` for testing.
-  try {
-    const o = new URLSearchParams(location.search).get('runs');
-    if (o) return o;
-  } catch (e) {}
-  return 'https://trashure-island.basiloco.partykit.dev/parties/main/runs';
-})();
+const _RUNS_URL = BACKEND_HTTP + '/parties/main/runs';
 const RUN_PENDING_KEY = 'ti_run_pending';
 const RUN_PENDING_MAX_CHARS = 3000000; // ~3 MB of unsent chunks max on device
 const RUN_FRAME_DT  = 0.1;  // 10 Hz pilot frames

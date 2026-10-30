@@ -1,6 +1,0 @@
-{
-  "$schema": "https://www.partykit.io/schema.json",
-  "name": "trashure-island",
-  "main": "party/main.ts",
-  "compatibilityDate": "2024-09-01"
-}

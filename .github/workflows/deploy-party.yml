@@ -1,30 +1,30 @@
-name: Deploy PartyKit server
+name: Deploy game server
 
-# Auto-deploys party/main.ts to PartyKit whenever the server code,
-# manifest, or this workflow changes. The first deploy still has to
-# be done locally to establish the partykit.dev subdomain — after
-# that, this handles every subsequent push.
+# Auto-deploys party/ to Cloudflare whenever the server code or this
+# workflow changes. The first deploy and the ADMIN_TOKEN secret are done
+# locally (see party/README.md) — this handles every push after that.
 #
 # Setup (one-time, in GitHub repo Settings -> Secrets -> Actions):
-#   PARTYKIT_LOGIN = your PartyKit username (e.g. "basiloco")
-#   PARTYKIT_TOKEN = the access_token from ~/.partykit/config.json
-# See the bottom of party/README.md for how to grab these.
+#   CLOUDFLARE_API_TOKEN  = token from the "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID = shown on the Cloudflare dashboard
 on:
   push:
     branches: [main]
     paths:
       - "party/**"
-      - "partykit.json"
       - ".github/workflows/deploy-party.yml"
   workflow_dispatch:
 
 concurrency:
-  group: partykit-deploy
+  group: server-deploy
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: party
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,18 +32,18 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
-      - name: Deploy to PartyKit
+      - name: Install
+        run: npm ci
+
+      - name: Deploy to Cloudflare
         env:
-          PARTYKIT_LOGIN: ${{ secrets.PARTYKIT_LOGIN }}
-          PARTYKIT_TOKEN: ${{ secrets.PARTYKIT_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if [ -z "$PARTYKIT_LOGIN" ] || [ -z "$PARTYKIT_TOKEN" ]; then
-            echo "::error::PARTYKIT_LOGIN and PARTYKIT_TOKEN must be set as repo secrets."
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must be set as repo secrets."
             exit 1
           fi
-          # partykit CLI reads PARTYKIT_LOGIN + PARTYKIT_TOKEN from env
-          # directly. This shape was confirmed working in run #3
-          # (commit f80bde6). Keep it simple.
-          npx --yes partykit@latest deploy
+          npx wrangler deploy
